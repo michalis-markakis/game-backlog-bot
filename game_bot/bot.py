@@ -81,7 +81,7 @@ async def telegram_webhook(req: Request):
 
 @app.get("/api/health")
 async def health():
-    return {"ok": True, "v": "modular-1"}
+    return {"ok": True, "v": "dedup-1"}
 
 
 # ── Handlers ──────────────────────────────────────────────────────────────────
@@ -112,6 +112,14 @@ async def handle_game_link(chat_id: int, url: str, note: str) -> None:
     summary = game.get("summary", "")
     if note:
         summary = note + (" — " + summary if summary else "")
+
+    # Don't add a game that's already in the backlog (matched by store URL or name).
+    dedup_store = store_url or (url if mapping.is_game_url(url) else "")
+    existing = await notion.find_existing(name, dedup_store)
+    if existing:
+        await telegram.send(
+            chat_id, f"✋ *{name}* is already in your To Play list.\n[Open in Notion]({existing})")
+        return
 
     store_url, video_url, review_url = await _resolve_links(url, name, store_url)
 

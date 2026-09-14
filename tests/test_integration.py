@@ -4,7 +4,7 @@ import pytest
 import respx
 
 # conftest stubs env vars before these imports
-from game_bot import metadata, steam, discovery
+from game_bot import metadata, steam, discovery, notion
 
 pytestmark = pytest.mark.asyncio
 
@@ -160,3 +160,39 @@ class TestFindTrailer:
             return_value=httpx.Response(200, text=html))
         out = await discovery.find_trailer("over the hill")
         assert "youtube.com/watch" in out
+
+
+# ── notion.find_existing (duplicate guard) ────────────────────────────────────
+
+class TestFindExisting:
+    @respx.mock
+    async def test_returns_url_when_match(self):
+        respx.post(url__regex=r"api\.notion\.com/v1/databases/.*/query").mock(
+            return_value=httpx.Response(200, json={"results": [{"url": "https://notion.so/existing"}]}))
+        out = await notion.find_existing("Hades II", "https://store.steampowered.com/app/1/")
+        assert out == "https://notion.so/existing"
+
+    @respx.mock
+    async def test_none_when_no_match(self):
+        respx.post(url__regex=r"api\.notion\.com/v1/databases/.*/query").mock(
+            return_value=httpx.Response(200, json={"results": []}))
+        assert await notion.find_existing("Nonexistent Game", "") is None
+
+    @respx.mock
+    async def test_filter_ors_store_and_name(self):
+        import json as _json
+        route = respx.post(url__regex=r"api\.notion\.com/v1/databases/.*/query").mock(
+            return_value=httpx.Response(200, json={"results": []}))
+        await notion.find_existing("Hades II", "https://store.steampowered.com/app/1/")
+        body = _json.loads(route.calls[0].request.content)
+        props = [c["property"] for c in body["filter"]["or"]]
+        assert "Store" in props and "Name" in props
+
+    @respx.mock
+    async def test_name_only_filter_when_no_store(self):
+        import json as _json
+        route = respx.post(url__regex=r"api\.notion\.com/v1/databases/.*/query").mock(
+            return_value=httpx.Response(200, json={"results": []}))
+        await notion.find_existing("Hades II", "")
+        body = _json.loads(route.calls[0].request.content)
+        assert body["filter"]["property"] == "Name"
