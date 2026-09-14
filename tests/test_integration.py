@@ -196,3 +196,33 @@ class TestFindExisting:
         await notion.find_existing("Hades II", "")
         body = _json.loads(route.calls[0].request.content)
         assert body["filter"]["property"] == "Name"
+
+
+# ── save-time duplicate guard ─────────────────────────────────────────────────
+
+from game_bot import bot
+
+class TestSaveTimeGuard:
+    async def test_skips_save_when_already_exists(self, monkeypatch):
+        calls = {"save": 0, "text": ""}
+        async def fake_find(name, store=""): return "https://notion.so/existing"
+        async def fake_save(g): calls["save"] += 1; return "https://notion.so/new"
+        async def fake_edit(cid, mid, text, kb=None): calls["text"] = text
+        monkeypatch.setattr(bot.notion, "find_existing", fake_find)
+        monkeypatch.setattr(bot.notion, "save_game", fake_save)
+        monkeypatch.setattr(bot.telegram, "edit_buttons", fake_edit)
+        await bot._save(1, {"name": "Hades II", "store_url": ""}, 10)
+        assert calls["save"] == 0                       # never persisted
+        assert "already in your To Play list" in calls["text"]
+
+    async def test_saves_when_not_a_duplicate(self, monkeypatch):
+        calls = {"save": 0, "text": ""}
+        async def fake_find(name, store=""): return None
+        async def fake_save(g): calls["save"] += 1; return "https://notion.so/new"
+        async def fake_edit(cid, mid, text, kb=None): calls["text"] = text
+        monkeypatch.setattr(bot.notion, "find_existing", fake_find)
+        monkeypatch.setattr(bot.notion, "save_game", fake_save)
+        monkeypatch.setattr(bot.telegram, "edit_buttons", fake_edit)
+        await bot._save(1, {"name": "New Game", "store_url": ""}, 10)
+        assert calls["save"] == 1
+        assert "Saved to To Play" in calls["text"]

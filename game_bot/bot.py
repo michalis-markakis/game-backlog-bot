@@ -81,7 +81,7 @@ async def telegram_webhook(req: Request):
 
 @app.get("/api/health")
 async def health():
-    return {"ok": True, "v": "dedup-1"}
+    return {"ok": True, "v": "dedup-2"}
 
 
 # ── Handlers ──────────────────────────────────────────────────────────────────
@@ -192,6 +192,14 @@ async def handle_callback(cq: dict) -> None:
 
 
 async def _save(chat_id: int, pending: dict, message_id: int) -> None:
+    # Re-check at save time in case the same game was shared and saved from another
+    # card between analysis and this tap.
+    existing = await notion.find_existing(pending["name"], pending.get("store_url", ""))
+    if existing:
+        await telegram.edit_buttons(
+            chat_id, message_id,
+            f"✋ *{pending['name']}* is already in your To Play list.\n[Open in Notion]({existing})")
+        return
     try:
         notion_url = await notion.save_game(pending)
     except Exception as e:
