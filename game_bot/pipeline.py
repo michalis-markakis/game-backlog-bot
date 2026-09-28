@@ -46,7 +46,10 @@ async def analyse_game_link(url: str, meta: dict) -> dict:
     # ── Steam is authoritative when it matched ───────────────────────────────
     if steam_data.get("name"):
         result = dict(steam_data)
-        result["status"] = "Unreleased" if result.pop("coming_soon", False) else "Out"
+        coming_soon = result.pop("coming_soon", False)
+        early_access = result.pop("early_access", False)
+        result["status"] = _apply_early_access(
+            "Unreleased" if coming_soon else "Out", early_access)
         # Enrich console platforms from IGDB only when it's clearly the same game.
         if igdb_data.get("name") and norm_name(igdb_data["name"]) == norm_name(steam_data["name"]):
             result["platforms"] = list(dict.fromkeys(
@@ -58,6 +61,7 @@ async def analyse_game_link(url: str, meta: dict) -> dict:
 
     # ── Not on Steam → IGDB, else Groq ───────────────────────────────────────
     result = dict(igdb_data) if igdb_data.get("name") else await _groq_fallback(url, cleaned, desc)
+    early_access = result.pop("early_access", False)
     name = clean_field(result.get("name", "")) or cleaned
 
     # ── Locate the store page (the shared link, IGDB's website, or a search) ──
@@ -87,8 +91,8 @@ async def analyse_game_link(url: str, meta: dict) -> dict:
     result["name"] = name
     result["release_date"] = release_date              # exact ISO only, else ""
     result["release_human"] = "" if release_date else release_human
-    result["status"] = _status(release_date, release_human, result.get("release_ts"),
-                                result.get("status"))
+    status = _status(release_date, release_human, result.get("release_ts"), result.get("status"))
+    result["status"] = _apply_early_access(status, early_access)
     result.setdefault("summary", desc[:300] if desc else "")
     result["genres"] = mapping.map_genres(result.get("genres") or [])
     result["platforms"] = mapping.map_platforms(result.get("platforms") or [])
@@ -107,6 +111,14 @@ def _status(release_date: str, release_human: str, release_ts, groq_status) -> s
     if release_human:
         return "Unreleased"                            # a quarter/year still ahead
     return groq_status or "Out"
+
+
+def _apply_early_access(status: str, early_access: bool) -> str:
+    """
+    An Early Access game is released but not finished — don't mark it "Out" (fully
+    released) until it actually leaves Early Access. Never overrides "Unreleased".
+    """
+    return "Early Access" if (early_access and status == "Out") else status
 
 
 async def _igdb_lookup(query: str, slug: str) -> dict:

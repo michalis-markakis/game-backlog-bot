@@ -36,7 +36,7 @@ async def _restore_original_path(request: Request, call_next):
 # Pending confirmation cards, keyed by a short id embedded in the button callbacks.
 PENDING: dict = {}
 
-_VALID_STATUS = ("Unreleased", "Out", "Playing", "Finished")
+_VALID_STATUS = ("Unreleased", "Early Access", "Out", "Playing", "Finished")
 _HYPE_BY_LEVEL = {"3": "★★★", "2": "★★", "1": "★"}
 
 HELP_TEXT = (
@@ -81,7 +81,7 @@ async def telegram_webhook(req: Request):
 
 @app.get("/api/health")
 async def health():
-    return {"ok": True, "v": "dedup-2"}
+    return {"ok": True, "v": "early-access-1"}
 
 
 # ── Handlers ──────────────────────────────────────────────────────────────────

@@ -5,7 +5,7 @@ import httpx
 from .config import NOTION_HEADERS, NOTION_DB_GAME
 from .text_utils import rich_text
 
-_STATUSES = ("Unreleased", "Out", "Playing", "Finished")
+_STATUSES = ("Unreleased", "Early Access", "Out", "Playing", "Finished")
 _HYPE = ("★★★", "★★", "★")
 
 

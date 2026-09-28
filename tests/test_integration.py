@@ -4,7 +4,7 @@ import pytest
 import respx
 
 # conftest stubs env vars before these imports
-from game_bot import metadata, steam, discovery, notion
+from game_bot import metadata, steam, discovery, notion, pipeline
 
 pytestmark = pytest.mark.asyncio
 
@@ -86,12 +86,83 @@ class TestSteamAppdetails:
         assert out["coming_soon"] is True
         assert out["release_date"] == "" and out["release_human"] == "2026"
         assert out["store_url"] == "https://store.steampowered.com/app/3714420/"
+        assert out["early_access"] is False
 
     @respx.mock
     async def test_unsuccessful_returns_empty(self):
         respx.get(url__regex=r"store\.steampowered\.com/api/appdetails").mock(
             return_value=httpx.Response(200, json={"999": {"success": False}}))
         assert await steam.appdetails("999") == {}
+
+    @respx.mock
+    async def test_detects_early_access_by_genre_id(self):
+        payload = {"111": {"success": True, "data": {
+            "type": "game", "name": "Some EA Game", "developers": ["Studio"],
+            "genres": [{"id": "1", "description": "Action"}, {"id": "70", "description": "Early Access"}],
+            "release_date": {"coming_soon": False, "date": "1 Jan, 2025"},
+            "short_description": "An early access roguelike.",
+        }}}
+        respx.get(url__regex=r"store\.steampowered\.com/api/appdetails").mock(
+            return_value=httpx.Response(200, json=payload))
+        out = await steam.appdetails("111")
+        assert out["early_access"] is True
+        assert "Early Access" not in out["genres"]     # not surfaced as a Genre tag
+
+    @respx.mock
+    async def test_detects_early_access_by_description_without_id(self):
+        payload = {"222": {"success": True, "data": {
+            "type": "game", "name": "Another EA Game", "developers": ["Studio"],
+            "genres": [{"description": "Early Access"}],
+            "release_date": {"coming_soon": False, "date": "1 Jan, 2025"},
+        }}}
+        respx.get(url__regex=r"store\.steampowered\.com/api/appdetails").mock(
+            return_value=httpx.Response(200, json=payload))
+        out = await steam.appdetails("222")
+        assert out["early_access"] is True
+
+
+# ── pipeline.analyse_game_link (end-to-end, Steam-authoritative path) ─────────
+
+class TestAnalyseGameLinkEarlyAccess:
+    @respx.mock
+    async def test_steam_early_access_game_is_not_marked_out(self):
+        appid = "555"
+        respx.post("https://id.twitch.tv/oauth2/token").mock(
+            return_value=httpx.Response(200, json={"access_token": "tok", "expires_in": 3600}))
+        respx.post("https://api.igdb.com/v4/games").mock(return_value=httpx.Response(200, json=[]))
+        payload = {appid: {"success": True, "data": {
+            "type": "game", "name": "EA Game", "developers": ["Studio"],
+            "genres": [{"id": "70", "description": "Early Access"}],
+            "release_date": {"coming_soon": False, "date": "1 Jan, 2025"},
+            "short_description": "An early access game.",
+        }}}
+        respx.get(url__regex=r"store\.steampowered\.com/api/appdetails").mock(
+            return_value=httpx.Response(200, json=payload))
+
+        game = await pipeline.analyse_game_link(
+            f"https://store.steampowered.com/app/{appid}/EA_Game/",
+            {"title": "EA Game", "desc": ""})
+        assert game["status"] == "Early Access"
+
+    @respx.mock
+    async def test_steam_fully_released_game_is_out(self):
+        appid = "556"
+        respx.post("https://id.twitch.tv/oauth2/token").mock(
+            return_value=httpx.Response(200, json={"access_token": "tok", "expires_in": 3600}))
+        respx.post("https://api.igdb.com/v4/games").mock(return_value=httpx.Response(200, json=[]))
+        payload = {appid: {"success": True, "data": {
+            "type": "game", "name": "Released Game", "developers": ["Studio"],
+            "genres": [{"id": "1", "description": "Action"}],
+            "release_date": {"coming_soon": False, "date": "1 Jan, 2025"},
+            "short_description": "A finished game.",
+        }}}
+        respx.get(url__regex=r"store\.steampowered\.com/api/appdetails").mock(
+            return_value=httpx.Response(200, json=payload))
+
+        game = await pipeline.analyse_game_link(
+            f"https://store.steampowered.com/app/{appid}/Released_Game/",
+            {"title": "Released Game", "desc": ""})
+        assert game["status"] == "Out"
 
 
 class TestSteamSearchAppid:

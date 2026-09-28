@@ -81,13 +81,18 @@ async def appdetails(appid: str) -> dict:
         if data.get("type") != "game":
             return {}
         devs = data.get("developers") or []
-        genres = mapping.map_genres(
-            [g.get("description", "") for g in data.get("genres", []) if isinstance(g, dict)])
+        raw_genres = [g for g in data.get("genres", []) if isinstance(g, dict)]
+        genres = mapping.map_genres([g.get("description", "") for g in raw_genres])
         # Supplement coarse Steam tags with distinctive subgenres from the blurb.
         blob = f"{data.get('name', '')} {data.get('short_description', '')}".lower()
         for kw, g in mapping.DESC_GENRE_HINTS.items():
             if g not in genres and kw in blob:
                 genres.append(g)
+        # Steam tags Early Access titles with genre id 70 ("Early Access") — check the
+        # raw genres (before map_genres, which has no mapping for it and drops it).
+        early_access = any(
+            g.get("id") == "70" or (g.get("description") or "").strip().lower() == "early access"
+            for g in raw_genres)
         rd = data.get("release_date") or {}
         date_str = (rd.get("date") or "").strip()
         exact = mapping.parse_exact_date(date_str)
@@ -99,6 +104,7 @@ async def appdetails(appid: str) -> dict:
             "release_date":  exact,
             "release_human": "" if exact else date_str,
             "coming_soon":   bool(rd.get("coming_soon")),
+            "early_access":  early_access,
             "summary":       (data.get("short_description") or "")[:500],
             "store_url":     f"https://store.steampowered.com/app/{appid}/",
         }

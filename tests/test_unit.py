@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import pytest
 
 # conftest stubs env vars before these imports
-from game_bot import text_utils, mapping, metadata, igdb, steam, discovery
+from game_bot import text_utils, mapping, metadata, igdb, steam, discovery, pipeline
 
 
 # ── text_utils ────────────────────────────────────────────────────────────────
@@ -291,3 +291,22 @@ class TestMetacriticUrl:
 
     def test_empty(self):
         assert discovery.metacritic_url("") == ""
+
+
+# ── pipeline._apply_early_access ──────────────────────────────────────────────
+
+class TestApplyEarlyAccess:
+    def test_out_becomes_early_access(self):
+        assert pipeline._apply_early_access("Out", True) == "Early Access"
+
+    def test_out_stays_out_when_not_early_access(self):
+        assert pipeline._apply_early_access("Out", False) == "Out"
+
+    def test_never_overrides_unreleased(self):
+        # A game with an upcoming date shouldn't flip to Early Access just because
+        # some stale genre tag says so — Unreleased already means "not out yet".
+        assert pipeline._apply_early_access("Unreleased", True) == "Unreleased"
+
+    def test_leaves_other_statuses_alone(self):
+        assert pipeline._apply_early_access("Playing", True) == "Playing"
+        assert pipeline._apply_early_access("Finished", True) == "Finished"

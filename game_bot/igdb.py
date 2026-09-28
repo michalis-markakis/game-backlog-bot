@@ -70,7 +70,7 @@ async def search_game(name: str) -> dict:
     clean = mapping.clean_game_title(name)
     query = (
         f'search "{clean}"; '
-        f"fields name,summary,genres.name,platforms.name,"
+        f"fields name,summary,genres.name,platforms.name,status,"
         f"involved_companies.company.name,involved_companies.developer,"
         f"first_release_date,websites.url,websites.category,"
         f"release_dates.human,release_dates.category,release_dates.date,release_dates.region; "
@@ -101,6 +101,9 @@ async def search_game(name: str) -> dict:
             sites.setdefault(w.get("category"), w["url"])
     store_url = next((sites[c] for c in (13, 17, 16, 15, 1) if c in sites), "")
 
+    # IGDB game_status enum: 4 = Early Access.
+    early_access = game.get("status") == 4
+
     return {
         "name":          game.get("name", clean),
         "developer":     developer,
@@ -109,6 +112,7 @@ async def search_game(name: str) -> dict:
         "release_date":  release_date,    # exact ISO only (category 0); else ""
         "release_human": release_human,   # approximate text, e.g. "Q2 2026"
         "release_ts":    release_ts,      # best timestamp for the Out/Unreleased call
+        "early_access":  early_access,
         "store_url":     store_url,
         "summary":       (game.get("summary") or "")[:500],
     }
