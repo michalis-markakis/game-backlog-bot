@@ -297,3 +297,69 @@ class TestSaveTimeGuard:
         await bot._save(1, {"name": "New Game", "store_url": ""}, 10)
         assert calls["save"] == 1
         assert "Saved to To Play" in calls["text"]
+
+
+# ── IGDB time to beat ─────────────────────────────────────────────────────────
+
+def _steam_payload(appid, name, coming_soon=False):
+    return {appid: {"success": True, "data": {
+        "type": "game", "name": name, "developers": ["Studio"],
+        "genres": [{"id": "1", "description": "Action"}],
+        "release_date": {"coming_soon": coming_soon, "date": "1 Jan, 2025"},
+        "short_description": "A game.",
+    }}}
+
+
+class TestTimeToBeat:
+    @respx.mock
+    async def test_released_game_gets_hours(self):
+        from game_bot import igdb
+        respx.post("https://id.twitch.tv/oauth2/token").mock(
+            return_value=httpx.Response(200, json={"access_token": "tok", "expires_in": 3600}))
+        respx.post("https://api.igdb.com/v4/games").mock(return_value=httpx.Response(
+            200, json=[{"id": 42, "name": "Beatable"}]))
+        respx.post("https://api.igdb.com/v4/game_time_to_beats").mock(
+            return_value=httpx.Response(200, json=[{"id": 1, "normally": 36000}]))
+        respx.get(url__regex=r"store\.steampowered\.com/api/appdetails").mock(
+            return_value=httpx.Response(200, json=_steam_payload("700", "Beatable")))
+
+        game = await pipeline.analyse_game_link(
+            "https://store.steampowered.com/app/700/Beatable/", {"title": "Beatable", "desc": ""})
+        assert game["time_to_beat"] == 10.0
+        assert await igdb.time_to_beat(42) == 10.0
+
+    @respx.mock
+    async def test_unreleased_game_skips_lookup(self):
+        respx.post("https://id.twitch.tv/oauth2/token").mock(
+            return_value=httpx.Response(200, json={"access_token": "tok", "expires_in": 3600}))
+        respx.post("https://api.igdb.com/v4/games").mock(return_value=httpx.Response(
+            200, json=[{"id": 43, "name": "Future"}]))
+        ttb = respx.post("https://api.igdb.com/v4/game_time_to_beats").mock(
+            return_value=httpx.Response(200, json=[{"normally": 3600}]))
+        respx.get(url__regex=r"store\.steampowered\.com/api/appdetails").mock(
+            return_value=httpx.Response(200, json=_steam_payload("701", "Future", coming_soon=True)))
+
+        game = await pipeline.analyse_game_link(
+            "https://store.steampowered.com/app/701/Future/", {"title": "Future", "desc": ""})
+        assert game["time_to_beat"] is None
+        assert not ttb.called
+
+    @respx.mock
+    async def test_no_data_returns_none(self):
+        from game_bot import igdb
+        respx.post("https://id.twitch.tv/oauth2/token").mock(
+            return_value=httpx.Response(200, json={"access_token": "tok", "expires_in": 3600}))
+        respx.post("https://api.igdb.com/v4/game_time_to_beats").mock(
+            return_value=httpx.Response(200, json=[]))
+        assert await igdb.time_to_beat(99) is None
+
+
+class TestSaveTimeToBeat:
+    @respx.mock
+    async def test_number_property_written(self):
+        route = respx.post("https://api.notion.com/v1/pages").mock(
+            return_value=httpx.Response(200, json={"url": "https://notion.so/x"}))
+        await notion.save_game({"name": "G", "time_to_beat": 12.5})
+        import json
+        props = json.loads(route.calls[0].request.content)["properties"]
+        assert props["Time to Beat"] == {"number": 12.5}

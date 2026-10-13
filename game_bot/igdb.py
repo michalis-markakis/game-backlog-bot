@@ -70,7 +70,7 @@ async def search_game(name: str) -> dict:
     clean = mapping.clean_game_title(name)
     query = (
         f'search "{clean}"; '
-        f"fields name,summary,genres.name,platforms.name,status,"
+        f"fields id,name,summary,genres.name,platforms.name,status,"
         f"involved_companies.company.name,involved_companies.developer,"
         f"first_release_date,websites.url,websites.category,"
         f"release_dates.human,release_dates.category,release_dates.date,release_dates.region; "
@@ -105,6 +105,7 @@ async def search_game(name: str) -> dict:
     early_access = game.get("status") == 4
 
     return {
+        "igdb_id":       game.get("id"),
         "name":          game.get("name", clean),
         "developer":     developer,
         "genres":        genres,
@@ -116,6 +117,25 @@ async def search_game(name: str) -> dict:
         "store_url":     store_url,
         "summary":       (game.get("summary") or "")[:500],
     }
+
+
+async def time_to_beat(igdb_id: int) -> float | None:
+    """
+    Hours to beat the main game, from IGDB's community-submitted completion times
+    (the "normally" figure, in seconds), or None when IGDB has no data for the game.
+    """
+    if not igdb_id:
+        return None
+    token = await _get_token()
+    query = f"fields normally; where game_id = {int(igdb_id)}; limit 1;"
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.post("https://api.igdb.com/v4/game_time_to_beats", content=query, headers={
+            "Client-ID": TWITCH_CLIENT_ID, "Authorization": f"Bearer {token}",
+        })
+    r.raise_for_status()
+    results = r.json()
+    seconds = results[0].get("normally") if results and isinstance(results[0], dict) else None
+    return round(seconds / 3600, 1) if seconds else None
 
 
 def _pick_developer(companies: list) -> str:
