@@ -36,7 +36,7 @@ async def _restore_original_path(request: Request, call_next):
 # Pending confirmation cards, keyed by a short id embedded in the button callbacks.
 PENDING: dict = {}
 
-_VALID_STATUS = ("Unreleased", "Early Access", "Out", "Playing", "Finished")
+_VALID_STATUS = ("Unreleased", "Early Access", "Out", "Playing", "Finished", "Abandoned")
 _HYPE_BY_LEVEL = {"3": "★★★", "2": "★★", "1": "★"}
 
 HELP_TEXT = (
@@ -129,11 +129,13 @@ async def handle_game_link(chat_id: int, url: str, note: str) -> None:
         "genres": genres, "platforms": platforms, "status": status,
         "release_date": release_date, "store_url": store_url,
         "review_url": review_url, "video_url": video_url,
+        "time_to_beat": game.get("time_to_beat"),
     }
     await telegram.send_buttons(
         chat_id,
         _card(name, developer, genres, platforms, status, release_date,
-              release_human, store_url, video_url, review_url, summary),
+              release_human, store_url, video_url, review_url, summary,
+              game.get("time_to_beat")),
         _hype_keyboard(pid),
     )
 
@@ -217,7 +219,7 @@ async def _save(chat_id: int, pending: dict, message_id: int) -> None:
 # ── Card rendering ────────────────────────────────────────────────────────────
 
 def _card(name, developer, genres, platforms, status, release_date,
-          release_human, store_url, video_url, review_url, summary) -> str:
+          release_human, store_url, video_url, review_url, summary, time_to_beat=None) -> str:
     lines = [f"🎮 *{name}*"]
     if developer:
         lines.append(f"👨‍💻 {developer}")
@@ -231,6 +233,8 @@ def _card(name, developer, genres, platforms, status, release_date,
     elif release_human:
         detail += f"  ·  📅 ~{release_human}"
     lines.append(detail)
+    if time_to_beat:
+        lines.append(f"⏱️ ~{time_to_beat:g}h to beat")
     if store_url:
         lines.append(f"🛒 [Store]({store_url})")
     if video_url:

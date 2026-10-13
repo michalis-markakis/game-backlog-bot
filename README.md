@@ -34,7 +34,7 @@ authoritative for it:
 | Source | Trusted for | Why |
 | --- | --- | --- |
 | **Steam** store API | name, developer, genres, release date | The appid is unambiguous, so there's no wrong-game risk. Found from the URL, or by an exact-name search that skips playtests/demos. |
-| **IGDB** | console platforms; whole-game fallback | Steam only reports desktop. IGDB fills in Switch/PS/Xbox — but only when its match is clearly the same game. |
+| **IGDB** | console platforms; time to beat; whole-game fallback | Steam only reports desktop. IGDB fills in Switch/PS/Xbox — but only when its match is clearly the same game. |
 | **Groq** (LLM) | last-resort extraction | For the rare game neither store recognises. |
 | **Jina Reader** | rendering JS-heavy pages | Xbox/Nintendo/PlayStation/Instagram return a shell page to a plain fetch; Jina renders them so we get the real title + store date. |
 | **Metacritic / Steam / DuckDuckGo** | review + trailer links | Metacritic's slug is deterministic; Steam's own reviews page is a guaranteed-correct fallback for unreleased games. |
@@ -88,7 +88,7 @@ cp .env.example .env      # fill in the required keys (see below)
 
 The Notion integration must be shared with the "To Play" database. Its schema:
 `Name` (title), `Developer` (text), `Genre` / `Platform` (multi-select), `Status` /
-`Hype` (select), `Release Date` (date), `Store` / `Review` / `Video` (url).
+`Hype` (select), `Release Date` (date), `Time to Beat` (number, hours), `Installed` (checkbox), `Store` / `Review` / `Video` (url).
 
 ## Run, test, deploy
 

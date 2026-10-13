@@ -2,7 +2,7 @@
 analyse_game_link — turn a link + its page metadata into one normalised game dict:
 
     {name, developer, genres, platforms, release_date, release_human, status,
-     store_url, summary}
+     store_url, summary, time_to_beat}
 
 Resolution strategy, in order of trust:
   1. Steam appdetails — if the game is on Steam (store URL, or found by name), its
@@ -57,6 +57,10 @@ async def analyse_game_link(url: str, meta: dict) -> dict:
         result.setdefault("summary", desc[:300] if desc else "")
         result["genres"] = mapping.map_genres(result.get("genres") or [])
         result["platforms"] = mapping.map_platforms(result.get("platforms") or [])
+        same_game = bool(igdb_data.get("name")) and \
+            norm_name(igdb_data["name"]) == norm_name(steam_data["name"])
+        result["time_to_beat"] = await _time_to_beat(
+            result["status"], igdb_data.get("igdb_id") if same_game else None)
         return result
 
     # ── Not on Steam → IGDB, else Groq ───────────────────────────────────────
@@ -96,7 +100,19 @@ async def analyse_game_link(url: str, meta: dict) -> dict:
     result.setdefault("summary", desc[:300] if desc else "")
     result["genres"] = mapping.map_genres(result.get("genres") or [])
     result["platforms"] = mapping.map_platforms(result.get("platforms") or [])
+    result["time_to_beat"] = await _time_to_beat(result["status"], result.get("igdb_id"))
     return result
+
+
+async def _time_to_beat(status: str, igdb_id) -> float | None:
+    """Hours to beat, for released games only; None if unknown or IGDB is unavailable."""
+    if status != "Out" or not igdb_id or not (TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET):
+        return None
+    try:
+        return await igdb.time_to_beat(igdb_id)
+    except Exception as e:
+        print(f"[igdb] time to beat failed: {e}")
+        return None
 
 
 def _status(release_date: str, release_human: str, release_ts, groq_status) -> str:

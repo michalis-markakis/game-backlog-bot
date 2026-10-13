@@ -5,7 +5,7 @@ import httpx
 from .config import NOTION_HEADERS, NOTION_DB_GAME
 from .text_utils import rich_text
 
-_STATUSES = ("Unreleased", "Early Access", "Out", "Playing", "Finished")
+_STATUSES = ("Unreleased", "Early Access", "Out", "Playing", "Finished", "Abandoned")
 _HYPE = ("★★★", "★★", "★")
 
 
@@ -57,6 +57,8 @@ async def save_game(game: dict) -> str:
         props["Status"] = {"select": {"name": game["status"]}}
     if game.get("hype") in _HYPE:
         props["Hype"] = {"select": {"name": game["hype"]}}
+    if game.get("time_to_beat"):
+        props["Time to Beat"] = {"number": game["time_to_beat"]}
     if game.get("release_date"):
         props["Release Date"] = {"date": {"start": game["release_date"]}}
 
