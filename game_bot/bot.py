@@ -6,15 +6,13 @@ Flow: a message with a link → analyse it → post a confirmation card with a
 held in an in-process dict, which is fine for a single-user bot.
 """
 from __future__ import annotations
-import hmac
 import re
 import uuid
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
 
-from .config import TELEGRAM_USER_ID, NOTION_DB_GAME, SECRET_KEY
+from .config import TELEGRAM_USER_ID, NOTION_DB_GAME
 from .text_utils import clean_field
-from . import telegram, metadata, pipeline, notion, mapping, discovery, steam, sanitize
+from . import telegram, metadata, pipeline, notion, mapping, discovery, steam
 
 app = FastAPI(title="Game Backlog Bot")
 
@@ -84,18 +82,6 @@ async def telegram_webhook(req: Request):
 @app.get("/api/health")
 async def health():
     return {"ok": True, "v": "early-access-1"}
-
-
-@app.api_route("/api/sanitize", methods=["GET", "POST"])
-async def sanitize_endpoint(req: Request):
-    """Clean up the To Play database. Trigger from a scheduler with the SECRET_KEY."""
-    supplied = (req.headers.get("authorization", "").removeprefix("Bearer ").strip()
-                or req.query_params.get("key", ""))
-    if not hmac.compare_digest(supplied, SECRET_KEY):
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
-    if not NOTION_DB_GAME:
-        return JSONResponse({"error": "NOTION_DB_GAME not set"}, status_code=500)
-    return await sanitize.run()
 
 
 # ── Handlers ──────────────────────────────────────────────────────────────────
