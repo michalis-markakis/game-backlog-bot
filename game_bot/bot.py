@@ -36,7 +36,7 @@ async def _restore_original_path(request: Request, call_next):
 # Pending confirmation cards, keyed by a short id embedded in the button callbacks.
 PENDING: dict = {}
 
-_VALID_STATUS = ("Unreleased", "Early Access", "Out", "Playing", "Finished")
+_VALID_STATUS = ("Unreleased", "Early Access", "Out", "Playing", "Finished", "Abandoned")
 _HYPE_BY_LEVEL = {"3": "★★★", "2": "★★", "1": "★"}
 
 HELP_TEXT = (
