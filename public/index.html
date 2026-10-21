@@ -1,53 +1,362 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Game Backlog Bot</title>
-  <style>
-    :root { color-scheme: light dark; }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-      background: #0f1117; color: #e6e8ee; min-height: 100vh; line-height: 1.6;
-      display: flex; align-items: center; justify-content: center; padding: 24px;
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Game Backlog</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+<style>
+  :root {
+    --bg: #f5f6fa; --surface: #ffffff; --surface-2: #eef0f6; --border: #e2e5ef;
+    --text: #151826; --muted: #6a7188; --accent: #6d5efc; --accent-soft: rgba(109,94,252,.12);
+    --shadow: 0 1px 2px rgba(20,24,50,.06), 0 8px 24px rgba(20,24,50,.06);
+    --s-unreleased: #8a90a6; --s-early: #f59e0b; --s-out: #10b981;
+    --s-playing: #3b82f6; --s-finished: #a855f7; --s-abandoned: #ef4444;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d0f17; --surface: #151824; --surface-2: #1d2133; --border: #272b40;
+      --text: #eceef7; --muted: #8e95b0; --accent: #8b7dff; --accent-soft: rgba(139,125,255,.16);
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 32px rgba(0,0,0,.35);
     }
-    .card {
-      max-width: 560px; background: #171a23; border: 1px solid #262a36;
-      border-radius: 16px; padding: 40px;
-    }
-    h1 { font-size: 26px; font-weight: 650; margin-bottom: 6px; }
-    .tag { color: #8b93a7; font-size: 15px; margin-bottom: 24px; }
-    .flow {
-      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
-      font-size: 13px; color: #aab2c5; margin: 20px 0 24px;
-    }
-    .flow span { background: #212636; border: 1px solid #2f3547; border-radius: 8px; padding: 5px 10px; }
-    .flow .arrow { background: none; border: none; color: #5a6379; padding: 0; }
-    p { color: #c3c8d4; font-size: 15px; margin-bottom: 14px; }
-    a { color: #6ea8ff; text-decoration: none; }
-    code { background: #212636; padding: 1px 6px; border-radius: 5px; font-size: 13px; }
-  </style>
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d0f17; --surface: #151824; --surface-2: #1d2133; --border: #272b40;
+    --text: #eceef7; --muted: #8e95b0; --accent: #8b7dff; --accent-soft: rgba(139,125,255,.16);
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 32px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; text-decoration: none; }
+  button, input, select { font: inherit; color: inherit; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 0 16px 64px; }
+
+  /* header */
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 28px 0 8px; }
+  h1 { font-size: clamp(24px, 4vw, 34px); font-weight: 750; letter-spacing: -.02em; }
+  h1 span { background: linear-gradient(120deg, var(--accent), #ec4899); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .sub { color: var(--muted); font-size: 14px; margin-top: 2px; }
+  .icon-btn { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; width: 38px; height: 38px; cursor: pointer; font-size: 16px; }
+  .icon-btn:hover { border-color: var(--accent); }
+  .actions { display: flex; gap: 8px; }
+
+  /* stats */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 20px 0; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 16px 18px; box-shadow: var(--shadow); }
+  .stat b { display: block; font-size: 28px; font-weight: 750; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .stat small { color: var(--muted); font-size: 13px; }
+
+  /* shelves */
+  .shelf-title { font-size: 13px; font-weight: 650; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 28px 0 10px; }
+  .shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+  .mini { display: flex; gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 10px; box-shadow: var(--shadow); transition: transform .15s, border-color .15s; }
+  .mini:hover { transform: translateY(-2px); border-color: var(--accent); }
+  .mini img, .mini .ph { width: 96px; height: 45px; border-radius: 8px; object-fit: cover; flex: none; background: var(--surface-2); }
+  .mini b { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mini small { color: var(--muted); font-size: 12px; }
+  .mini > div { min-width: 0; }
+
+  /* controls */
+  .controls { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); padding: 14px 0 10px; margin-top: 18px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .search { flex: 1 1 220px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; outline: none; }
+  .search:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  select { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; outline: none; cursor: pointer; }
+  .chips { margin-top: 10px; }
+  .chip { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 6px 13px; font-size: 13px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+  .chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--c, var(--muted)); }
+  .chip em { font-style: normal; color: var(--muted); font-size: 12px; }
+  .chip:hover { border-color: var(--accent); }
+  .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip.on em { color: rgba(255,255,255,.75); }
+
+  /* grid */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 16px; margin-top: 8px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; overflow: hidden; box-shadow: var(--shadow); display: flex; flex-direction: column; transition: transform .18s, border-color .18s; animation: in .35s both; }
+  .card:hover { transform: translateY(-4px); border-color: var(--accent); }
+  @keyframes in { from { opacity: 0; transform: translateY(8px); } }
+  .art { position: relative; aspect-ratio: 460/215; background: linear-gradient(135deg, var(--h1), var(--h2)); display: block; }
+  .art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .art .fallback { position: absolute; inset: 0; display: grid; place-items: center; color: rgba(255,255,255,.9); font-weight: 750; font-size: 22px; padding: 16px; text-align: center; }
+  .badge { position: absolute; top: 10px; left: 10px; background: rgba(10,12,20,.72); backdrop-filter: blur(6px); color: #fff; font-size: 12px; font-weight: 600; padding: 4px 10px 4px 8px; border-radius: 999px; display: inline-flex; gap: 6px; align-items: center; }
+  .badge i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+  .hype { position: absolute; top: 10px; right: 10px; background: rgba(10,12,20,.72); backdrop-filter: blur(6px); color: #fbbf24; font-size: 12px; padding: 4px 9px; border-radius: 999px; letter-spacing: 1px; }
+  .play { position: absolute; right: 10px; bottom: 10px; width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,.92); color: #111; display: grid; place-items: center; font-size: 13px; opacity: 0; transition: opacity .15s; }
+  .card:hover .play { opacity: 1; }
+  .body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+  .body h3 { font-size: 17px; font-weight: 700; letter-spacing: -.01em; line-height: 1.25; }
+  .dev { color: var(--muted); font-size: 13px; }
+  .tags { display: flex; flex-wrap: wrap; gap: 5px; }
+  .tag { background: var(--accent-soft); color: var(--accent); font-size: 11.5px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
+  .tag.plat { background: var(--surface-2); color: var(--muted); }
+  .meta { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+  .meta > span:first-child { white-space: nowrap; }
+  .meta b { color: var(--text); font-weight: 600; }
+  .links { display: flex; gap: 6px; }
+  .links a { background: var(--surface-2); border-radius: 8px; padding: 3px 9px; font-size: 12px; font-weight: 600; color: var(--text); }
+  .links a:hover { background: var(--accent); color: #fff; }
+  .soon { color: var(--accent); font-weight: 650; }
+
+  /* states */
+  .center { text-align: center; padding: 72px 16px; color: var(--muted); }
+  .center h2 { color: var(--text); margin-bottom: 8px; }
+  .gate { max-width: 400px; margin: 12vh auto; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 32px; box-shadow: var(--shadow); text-align: center; }
+  .gate input { width: 100%; margin: 16px 0 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 11px 14px; outline: none; }
+  .gate input:focus { border-color: var(--accent); }
+  .btn { background: var(--accent); color: #fff; border: 0; border-radius: 12px; padding: 11px 18px; font-weight: 650; cursor: pointer; width: 100%; }
+  .err { color: #ef4444; font-size: 13px; min-height: 20px; margin-top: 8px; }
+  .skeleton { height: 290px; border-radius: 18px; background: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 50%, var(--surface) 75%); background-size: 200% 100%; animation: sh 1.2s infinite; }
+  @keyframes sh { to { background-position: -200% 0; } }
+  [hidden] { display: none !important; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
 </head>
 <body>
-  <div class="card">
-    <h1>🎮 Game Backlog Bot</h1>
-    <div class="tag">Share a game link on Telegram — it lands in your Notion backlog, fully tagged.</div>
-    <div class="flow">
-      <span>Trailer / review / store link</span><span class="arrow">→</span>
-      <span>Steam · IGDB · Groq</span><span class="arrow">→</span>
-      <span>Notion “To Play”</span>
+<div class="wrap" id="app">
+  <header>
+    <div>
+      <h1>🎮 <span>Game Backlog</span></h1>
+      <div class="sub" id="sub">Synced live from your Notion “To Play” database</div>
     </div>
-    <p>
-      Send a trailer, a review, or a store page and the bot identifies the game, pulls its
-      developer, genres, platforms and release date, finds a store page and a review, and asks
-      how hyped you are before saving.
-    </p>
-    <p>
-      A FastAPI serverless function on Vercel. The backend lives in the
-      <code>game_bot</code> package — see the <a href="https://github.com/">source</a> for the
-      architecture.
-    </p>
-  </div>
+    <div class="actions">
+      <button class="icon-btn" id="refresh" title="Refresh" aria-label="Refresh">↻</button>
+      <button class="icon-btn" id="theme" title="Toggle theme" aria-label="Toggle theme">◐</button>
+      <button class="icon-btn" id="lock" title="Forget key" aria-label="Forget key" hidden>⎋</button>
+    </div>
+  </header>
+
+  <section id="gate" class="gate" hidden>
+    <h2>Enter your key</h2>
+    <p class="sub">The same <code>SECRET_KEY</code> your bot is deployed with.</p>
+    <form id="gateForm">
+      <input id="keyInput" type="password" placeholder="Secret key" autocomplete="current-password" required>
+      <button class="btn" type="submit">Unlock</button>
+    </form>
+    <div class="err" id="gateErr"></div>
+  </section>
+
+  <main id="main" hidden>
+    <div class="stats" id="stats"></div>
+    <div id="shelves"></div>
+    <div class="controls">
+      <div class="row">
+        <input class="search" id="q" type="search" placeholder="Search games, developers, genres…" aria-label="Search">
+        <select id="genre" aria-label="Genre"></select>
+        <select id="platform" aria-label="Platform"></select>
+        <select id="sort" aria-label="Sort">
+          <option value="added">Recently added</option>
+          <option value="release-asc">Release date ↑</option>
+          <option value="release-desc">Release date ↓</option>
+          <option value="hype">Most hyped</option>
+          <option value="length">Shortest to beat</option>
+          <option value="name">Name A–Z</option>
+        </select>
+      </div>
+      <div class="row chips" id="statusChips"></div>
+    </div>
+    <div class="grid" id="grid"></div>
+  </main>
+</div>
+
+<script>
+const STATUS_COLOR = { "Unreleased": "var(--s-unreleased)", "Early Access": "var(--s-early)", "Out": "var(--s-out)",
+  "Playing": "var(--s-playing)", "Finished": "var(--s-finished)", "Abandoned": "var(--s-abandoned)" };
+const STATUS_ORDER = Object.keys(STATUS_COLOR);
+const HYPE_RANK = { "★★★": 3, "★★": 2, "★": 1 };
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const safeUrl = u => /^https?:\/\//i.test(u || "") ? u : "";
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+  del(k) { try { localStorage.removeItem(k); } catch {} },
+};
+
+let games = [];
+const state = { q: "", status: "", genre: "", platform: "", sort: "added" };
+
+/* ── data ── */
+async function load() {
+  const demo = new URLSearchParams(location.search).has("demo");
+  if (demo) { games = demoGames(); show(); return; }
+  const key = store.get("gbb-key");
+  if (!key) return showGate();
+  $("main").hidden = false; $("gate").hidden = true;
+  $("grid").innerHTML = '<div class="skeleton"></div>'.repeat(6);
+  try {
+    const r = await fetch("/api/games", { headers: { "x-secret-key": key } });
+    if (r.status === 401) { store.del("gbb-key"); return showGate("That key didn't work."); }
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+    games = (await r.json()).games;
+    show();
+  } catch (e) {
+    $("grid").innerHTML = `<div class="center" style="grid-column:1/-1"><h2>Couldn't load your backlog</h2>${esc(e.message)}</div>`;
+  }
+}
+function showGate(msg = "") {
+  $("main").hidden = true; $("gate").hidden = false; $("lock").hidden = true;
+  $("gateErr").textContent = msg; $("keyInput").focus();
+}
+function show() {
+  $("gate").hidden = true; $("main").hidden = false; $("lock").hidden = !store.get("gbb-key");
+  buildFilters(); render();
+}
+
+/* ── helpers ── */
+function steamId(g) { return (/store\.steampowered\.com\/app\/(\d+)/.exec(g.store) || [])[1]; }
+function ytId(g) { return (/(?:v=|youtu\.be\/|shorts\/)([\w-]{11})/.exec(g.video) || [])[1]; }
+function art(g) {
+  const id = steamId(g); if (id) return `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/header.jpg`;
+  const y = ytId(g); return y ? `https://i.ytimg.com/vi/${y}/hqdefault.jpg` : "";
+}
+function hues(name) { let h = 0; for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 360; return [`hsl(${h} 55% 38%)`, `hsl(${(h + 50) % 360} 60% 24%)`]; }
+function daysUntil(d) { return d ? Math.ceil((new Date(d + "T00:00:00") - new Date().setHours(0, 0, 0, 0)) / 864e5) : null; }
+function fmtDate(d) {
+  if (!d) return "TBA";
+  const dt = new Date(d.length > 10 ? d : d + "T00:00:00");
+  return dt.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+function whenLabel(g) {
+  const n = daysUntil(g.release_date);
+  if (n !== null && n > 0) return `<span class="soon">${n === 1 ? "Tomorrow" : "In " + (n > 60 ? Math.round(n / 30) + " months" : n + " days")}</span>`;
+  return `<b>${fmtDate(g.release_date)}</b>`;
+}
+
+/* ── filters ── */
+function counts(key) {
+  const m = new Map();
+  games.forEach(g => (Array.isArray(g[key]) ? g[key] : [g[key]]).filter(Boolean).forEach(v => m.set(v, (m.get(v) || 0) + 1)));
+  return [...m.entries()].sort((a, b) => b[1] - a[1]);
+}
+function buildFilters() {
+  const opt = (label, list) => `<option value="">${label}</option>` + list.map(([v, n]) => `<option value="${esc(v)}">${esc(v)} (${n})</option>`).join("");
+  $("genre").innerHTML = opt("All genres", counts("genres"));
+  $("platform").innerHTML = opt("All platforms", counts("platforms"));
+  const st = new Map(counts("status"));
+  $("statusChips").innerHTML =
+    `<button class="chip on" data-s=""><i></i>All <em>${games.length}</em></button>` +
+    STATUS_ORDER.filter(s => st.has(s)).map(s => `<button class="chip" data-s="${s}" style="--c:${STATUS_COLOR[s]}"><i></i>${s} <em>${st.get(s)}</em></button>`).join("");
+}
+function visible() {
+  const q = state.q.toLowerCase();
+  const list = games.filter(g =>
+    (!state.status || g.status === state.status) &&
+    (!state.genre || g.genres.includes(state.genre)) &&
+    (!state.platform || g.platforms.includes(state.platform)) &&
+    (!q || [g.name, g.developer, ...g.genres, ...g.platforms].join(" ").toLowerCase().includes(q)));
+  const by = {
+    added: (a, b) => (b.added || "").localeCompare(a.added || ""),
+    "release-asc": (a, b) => (a.release_date || "9").localeCompare(b.release_date || "9"),
+    "release-desc": (a, b) => (b.release_date || "").localeCompare(a.release_date || ""),
+    hype: (a, b) => (HYPE_RANK[b.hype] || 0) - (HYPE_RANK[a.hype] || 0),
+    length: (a, b) => (a.time_to_beat ?? 1e9) - (b.time_to_beat ?? 1e9),
+    name: (a, b) => a.name.localeCompare(b.name),
+  }[state.sort];
+  return list.sort(by);
+}
+
+/* ── render ── */
+function render() {
+  renderStats(); renderShelves();
+  const list = visible();
+  $("grid").innerHTML = list.length ? list.map(card).join("") :
+    '<div class="center" style="grid-column:1/-1"><h2>Nothing matches</h2>Try clearing a filter.</div>';
+  document.querySelectorAll("#statusChips .chip").forEach(c => c.classList.toggle("on", c.dataset.s === state.status));
+}
+function renderStats() {
+  const backlog = games.filter(g => ["Out", "Early Access"].includes(g.status));
+  const hours = backlog.reduce((s, g) => s + (g.time_to_beat || 0), 0);
+  const soon = games.filter(g => g.status === "Unreleased" && daysUntil(g.release_date) > 0)
+    .sort((a, b) => a.release_date.localeCompare(b.release_date))[0];
+  const c = n => games.filter(g => g.status === n).length;
+  const tiles = [
+    [games.length, "games tracked"], [backlog.length, "ready to play"], [c("Playing"), "playing now"],
+    [c("Finished"), "finished"], [hours ? Math.round(hours) + "h" : "–", "backlog length"],
+    [soon ? daysUntil(soon.release_date) + "d" : "–", soon ? "until " + soon.name : "next release"],
+  ];
+  $("stats").innerHTML = tiles.map(([n, l]) => `<div class="stat"><b>${esc(n)}</b><small>${esc(l)}</small></div>`).join("");
+}
+function mini(g, sub) {
+  const a = art(g), [h1, h2] = hues(g.name);
+  return `<a class="mini" href="${esc(safeUrl(g.store) || g.url)}" target="_blank" rel="noopener">
+    ${a ? `<img src="${esc(a)}" alt="" loading="lazy" onerror="this.outerHTML='<div class=ph style=&quot;background:linear-gradient(135deg,${h1},${h2})&quot;></div>'">` : `<div class="ph" style="background:linear-gradient(135deg,${h1},${h2})"></div>`}
+    <div><b>${esc(g.name)}</b><small>${sub}</small></div></a>`;
+}
+function renderShelves() {
+  const playing = games.filter(g => g.status === "Playing");
+  const upcoming = games.filter(g => daysUntil(g.release_date) > 0 && g.status === "Unreleased")
+    .sort((a, b) => a.release_date.localeCompare(b.release_date)).slice(0, 4);
+  const next = games.filter(g => g.status === "Out" && g.hype === "★★★")
+    .sort((a, b) => (a.time_to_beat ?? 99) - (b.time_to_beat ?? 99)).slice(0, 4);
+  const shelf = (title, items, sub) => items.length ?
+    `<div class="shelf-title">${title}</div><div class="shelf">${items.map(g => mini(g, sub(g))).join("")}</div>` : "";
+  $("shelves").innerHTML =
+    shelf("▶ Now playing", playing, g => esc(g.developer || "In progress")) +
+    shelf("★ Up next · most hyped & ready", next, g => esc(g.time_to_beat ? g.time_to_beat + "h to beat" : "Ready to play")) +
+    shelf("⏳ Coming soon", upcoming, g => whenLabel(g));
+}
+function card(g, i) {
+  const a = art(g), [h1, h2] = hues(g.name), c = STATUS_COLOR[g.status] || "var(--muted)";
+  const link = safeUrl(g.store) || safeUrl(g.video) || g.url;
+  const links = [["Store", g.store], ["Review", g.review], ["Trailer", g.video], ["Notion", g.url]]
+    .filter(([, u]) => safeUrl(u)).map(([l, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${l}</a>`).join("");
+  return `<article class="card" style="animation-delay:${Math.min(i, 12) * 30}ms">
+    <a class="art" href="${esc(link)}" target="_blank" rel="noopener" style="--h1:${h1};--h2:${h2}">
+      <div class="fallback">${esc(g.name)}</div>
+      ${a ? `<img src="${esc(a)}" alt="" loading="lazy" onerror="this.remove()" style="position:relative">` : ""}
+      ${g.status ? `<span class="badge" style="--c:${c}"><i></i>${esc(g.status)}</span>` : ""}
+      ${g.hype ? `<span class="hype" title="Hype">${esc(g.hype)}</span>` : ""}
+      ${g.installed ? '<span class="play" title="Installed">✓</span>' : ""}
+    </a>
+    <div class="body">
+      <h3>${esc(g.name)}</h3>
+      ${g.developer ? `<div class="dev">${esc(g.developer)}</div>` : ""}
+      <div class="tags">${g.genres.map(x => `<span class="tag">${esc(x)}</span>`).join("")}${g.platforms.map(x => `<span class="tag plat">${esc(x)}</span>`).join("")}</div>
+      <div class="meta"><span>${whenLabel(g)}${g.time_to_beat ? ` · <b>${g.time_to_beat}h</b>` : ""}${g.rating ? ` · <b>${esc(g.rating)}</b>` : ""}</span><span class="links">${links}</span></div>
+    </div></article>`;
+}
+
+/* ── events ── */
+let t; $("q").addEventListener("input", e => { clearTimeout(t); t = setTimeout(() => { state.q = e.target.value.trim(); render(); }, 120); });
+for (const k of ["genre", "platform", "sort"]) $(k).addEventListener("change", e => { state[k] = e.target.value; render(); });
+$("statusChips").addEventListener("click", e => { const c = e.target.closest(".chip"); if (c) { state.status = c.dataset.s; render(); } });
+$("refresh").onclick = load;
+$("lock").onclick = () => { store.del("gbb-key"); showGate(); };
+$("gateForm").addEventListener("submit", e => { e.preventDefault(); store.set("gbb-key", $("keyInput").value.trim()); $("keyInput").value = ""; load(); });
+$("theme").onclick = () => {
+  const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  const next = cur === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = next; store.set("gbb-theme", next);
+};
+if (store.get("gbb-theme")) document.documentElement.dataset.theme = store.get("gbb-theme");
+
+/* ── demo data (?demo) so the UI can be previewed without a backend ── */
+function demoGames() {
+  const d = n => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+  const mk = (name, dev, genres, platforms, status, hype, days, ttb, installed, steam) => ({
+    id: name, url: "https://notion.so/", name, developer: dev, genres, platforms, status, hype, rating: status === "Finished" ? "9/10" : "",
+    release_date: d(days), time_to_beat: ttb, installed: !!installed, store: steam ? `https://store.steampowered.com/app/${steam}/` : "",
+    review: steam ? `https://steamcommunity.com/app/${steam}/reviews/` : "", video: "", added: d(-Math.abs(days) % 40) });
+  return [
+    mk("Hades II", "Supergiant Games", ["Roguelite", "Action"], ["PC", "Switch"], "Playing", "★★★", -60, 30, 1, 1145350),
+    mk("Haste", "Landfall Games", ["Platformer", "Racing"], ["PC", "PS5", "Xbox"], "Out", "★★★", -200, 8, 0, 1796470),
+    mk("Hollow Knight: Silksong", "Team Cherry", ["Metroidvania"], ["PC", "Switch"], "Finished", "★★★", -30, 25, 1, 1030300),
+    mk("Slay the Spire 2", "Mega Crit", ["Deckbuilder", "Roguelike"], ["PC"], "Early Access", "★★★", -90, 20, 1, 2868840),
+    mk("Balatro", "LocalThunk", ["Deckbuilder", "Puzzle"], ["PC", "Switch", "PS5"], "Finished", "★★", -400, 15, 0, 2379780),
+    mk("Hades", "Supergiant Games", ["Roguelite", "Action"], ["PC", "Switch"], "Abandoned", "★★", -900, 22, 0, 1145360),
+    mk("The Last Salvage Squad", "Sunfish Kumano", ["Shooter"], ["PC", "Switch"], "Out", "★★", -120, null, 0, 3551190),
+    mk("Cairn", "The Game Bakers", ["Adventure", "Survival"], ["PC", "PS5"], "Out", "★★★", -50, 12, 0, 1588550),
+    mk("Mythwrecked", "Polygon Treehouse", ["Adventure", "Puzzle"], ["PC"], "Unreleased", "★★", 18, 10, 0, 0),
+    mk("Hyper Light Breaker", "Heart Machine", ["Roguelite", "Open World"], ["PC"], "Unreleased", "★", 95, null, 0, 0),
+    mk("Mexican Ninja", "Studio Mx", ["Action", "Stealth"], ["PC"], "Unreleased", "★★", 210, null, 0, 0),
+    mk("Dave the Diver", "MINTROCKET", ["Adventure", "Simulation"], ["PC", "Switch", "PS5", "Xbox"], "Out", "★", -700, 14, 0, 1868140),
+  ];
+}
+
+load();
+</script>
 </body>
 </html>

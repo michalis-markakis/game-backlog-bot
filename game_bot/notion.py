@@ -67,3 +67,58 @@ async def save_game(game: dict) -> str:
                               json={"parent": {"database_id": NOTION_DB_GAME}, "properties": props})
     r.raise_for_status()
     return r.json()["url"]
+
+
+def _flatten_game(page: dict) -> dict:
+    """Reduce a Notion page to the plain fields the dashboard renders."""
+    p = page.get("properties", {})
+
+    def text(key: str) -> str:
+        return "".join(t.get("plain_text", "") for t in (p.get(key) or {}).get("rich_text", []))
+
+    def select(key: str) -> str:
+        return ((p.get(key) or {}).get("select") or {}).get("name", "")
+
+    def multi(key: str) -> list[str]:
+        return [o["name"] for o in (p.get(key) or {}).get("multi_select", [])]
+
+    title = "".join(t.get("plain_text", "") for t in (p.get("Name") or {}).get("title", []))
+    return {
+        "id": page["id"],
+        "url": page.get("url", ""),
+        "name": title,
+        "developer": text("Developer"),
+        "genres": multi("Genre"),
+        "platforms": multi("Platform"),
+        "status": select("Status"),
+        "hype": select("Hype"),
+        "rating": select("My Rating"),
+        "release_date": ((p.get("Release Date") or {}).get("date") or {}).get("start") or "",
+        "time_to_beat": (p.get("Time to Beat") or {}).get("number"),
+        "installed": bool((p.get("Installed") or {}).get("checkbox")),
+        "store": (p.get("Store") or {}).get("url") or "",
+        "review": (p.get("Review") or {}).get("url") or "",
+        "video": (p.get("Video") or {}).get("url") or "",
+        "added": page.get("created_time", ""),
+    }
+
+
+async def list_games() -> list[dict]:
+    """Return every game in the To Play database (paginated), newest first."""
+    games: list[dict] = []
+    cursor = None
+    async with httpx.AsyncClient(timeout=20) as client:
+        while True:
+            body: dict = {"page_size": 100,
+                          "sorts": [{"timestamp": "created_time", "direction": "descending"}]}
+            if cursor:
+                body["start_cursor"] = cursor
+            r = await client.post(
+                f"https://api.notion.com/v1/databases/{NOTION_DB_GAME}/query",
+                headers=NOTION_HEADERS, json=body)
+            r.raise_for_status()
+            data = r.json()
+            games.extend(_flatten_game(pg) for pg in data.get("results", []))
+            if not data.get("has_more"):
+                return games
+            cursor = data.get("next_cursor")
