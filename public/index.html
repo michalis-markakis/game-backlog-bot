@@ -269,12 +269,13 @@ function render() {
 }
 function renderStats() {
   const backlog = games.filter(g => ["Out", "Early Access"].includes(g.status));
+  const installed = games.filter(g => g.installed).length;
   const hours = backlog.reduce((s, g) => s + (g.time_to_beat || 0), 0);
   const soon = games.filter(g => g.status === "Unreleased" && daysUntil(g.release_date) > 0)
     .sort((a, b) => a.release_date.localeCompare(b.release_date))[0];
   const c = n => games.filter(g => g.status === n).length;
   const tiles = [
-    [games.length, "games tracked"], [backlog.length, "ready to play"], [c("Playing"), "playing now"],
+    [games.length, "games tracked"], [installed, "installed"], [c("Playing"), "playing now"],
     [c("Finished"), "finished"], [hours ? Math.round(hours) + "h" : "–", "backlog length"],
     [soon ? daysUntil(soon.release_date) + "d" : "–", soon ? "until " + soon.name : "next release"],
   ];
@@ -292,9 +293,14 @@ function renderShelves() {
     .sort((a, b) => a.release_date.localeCompare(b.release_date)).slice(0, 4);
   const next = games.filter(g => g.status === "Out" && g.hype === "★★★")
     .sort((a, b) => (a.time_to_beat ?? 99) - (b.time_to_beat ?? 99)).slice(0, 4);
+  const installed = games.filter(g => g.installed)
+    .sort((a, b) => (a.status === "Playing" ? 0 : 1) - (b.status === "Playing" ? 0 : 1) || a.name.localeCompare(b.name));
   const shelf = (title, items, sub) => items.length ?
     `<div class="shelf-title">${title}</div><div class="shelf">${items.map(g => mini(g, sub(g))).join("")}</div>` : "";
   $("shelves").innerHTML =
+    `<div class="shelf-title">✓ Ready to Play</div>` + (installed.length
+      ? `<div class="shelf">${installed.map(g => mini(g, esc([g.status, g.time_to_beat ? g.time_to_beat + "h to beat" : ""].filter(Boolean).join(" · ")))).join("")}</div>`
+      : `<p class="sub">No installed games yet — tick “Installed” in Notion and they'll show up here.</p>`) +
     shelf("▶ Now playing", playing, g => esc(g.developer || "In progress")) +
     shelf("★ Up next · most hyped & ready", next, g => esc(g.time_to_beat ? g.time_to_beat + "h to beat" : "Ready to play")) +
     shelf("⏳ Coming soon", upcoming, g => whenLabel(g));
