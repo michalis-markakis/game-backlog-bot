@@ -8,9 +8,10 @@ held in an in-process dict, which is fine for a single-user bot.
 from __future__ import annotations
 import re
 import uuid
-from fastapi import FastAPI, Request
+import hmac
+from fastapi import FastAPI, Request, HTTPException
 
-from .config import TELEGRAM_USER_ID, NOTION_DB_GAME
+from .config import TELEGRAM_USER_ID, NOTION_DB_GAME, SECRET_KEY
 from .text_utils import clean_field
 from . import telegram, metadata, pipeline, notion, mapping, discovery, steam
 
@@ -82,6 +83,21 @@ async def telegram_webhook(req: Request):
 @app.get("/api/health")
 async def health():
     return {"ok": True, "v": "early-access-1"}
+
+
+@app.get("/api/games")
+async def games(request: Request):
+    """Read-only feed for the dashboard in public/index.html; guarded by SECRET_KEY."""
+    given = request.headers.get("x-secret-key", "")
+    if not hmac.compare_digest(given.encode(), SECRET_KEY.encode()):
+        raise HTTPException(status_code=401, detail="Invalid key")
+    if not NOTION_DB_GAME:
+        raise HTTPException(status_code=503, detail="NOTION_DB_GAME not configured")
+    try:
+        return {"games": await notion.list_games()}
+    except Exception as e:
+        print(f"[notion] list failed: {e}")
+        raise HTTPException(status_code=502, detail="Could not read Notion")
 
 
 # ── Handlers ──────────────────────────────────────────────────────────────────

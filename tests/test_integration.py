@@ -363,3 +363,35 @@ class TestSaveTimeToBeat:
         import json
         props = json.loads(route.calls[0].request.content)["properties"]
         assert props["Time to Beat"] == {"number": 12.5}
+
+
+class TestGamesFeed:
+    PAGE = {"id": "p1", "url": "https://notion.so/p1", "created_time": "2026-01-01T00:00:00Z",
+            "properties": {
+                "Name": {"title": [{"plain_text": "Haste"}]},
+                "Developer": {"rich_text": [{"plain_text": "Landfall"}]},
+                "Genre": {"multi_select": [{"name": "Racing"}]},
+                "Status": {"select": {"name": "Out"}},
+                "Release Date": {"date": {"start": "2025-04-01"}},
+                "Time to Beat": {"number": 8},
+                "Installed": {"checkbox": True},
+                "Store": {"url": "https://store.steampowered.com/app/1796470/"}}}
+
+    @respx.mock
+    async def test_list_games_flattens_and_paginates(self):
+        route = respx.post("https://api.notion.com/v1/databases/game-db-id/query").mock(
+            side_effect=[
+                httpx.Response(200, json={"results": [self.PAGE], "has_more": True, "next_cursor": "c"}),
+                httpx.Response(200, json={"results": [], "has_more": False}),
+            ])
+        games = await notion.list_games()
+        assert route.call_count == 2
+        assert games[0]["name"] == "Haste" and games[0]["genres"] == ["Racing"]
+        assert games[0]["time_to_beat"] == 8 and games[0]["installed"] is True
+        assert games[0]["platforms"] == [] and games[0]["review"] == ""
+
+    async def test_endpoint_rejects_bad_key(self):
+        from fastapi.testclient import TestClient
+        c = TestClient(bot.app)
+        assert c.get("/api/games").status_code == 401
+        assert c.get("/api/games", headers={"x-secret-key": "nope"}).status_code == 401

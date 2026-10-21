@@ -90,6 +90,15 @@ The Notion integration must be shared with the "To Play" database. Its schema:
 `Name` (title), `Developer` (text), `Genre` / `Platform` (multi-select), `Status` /
 `Hype` (select), `Release Date` (date), `Time to Beat` (number, hours), `Installed` (checkbox), `Store` / `Review` / `Video` (url).
 
+## Dashboard
+
+The site root (`public/index.html`) is a read-only dashboard over the same Notion database:
+stats, "now playing / up next / coming soon" shelves, search, genre/platform/status filters,
+sorting, and cards with Steam artwork. It reads `GET /api/games`, which queries Notion
+server-side (the Notion token never reaches the browser) and requires the `SECRET_KEY` in an
+`x-secret-key` header — the page asks for it once and keeps it in `localStorage`.
+Open `/?demo` to preview the UI with sample data.
+
 ## Run, test, deploy
 
 ```bash
