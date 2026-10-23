@@ -63,17 +63,9 @@
   .mini { display: flex; gap: 14px; align-items: center; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 3px; padding: 10px; transition: border-color .2s; min-width: 0; }
   .mini:hover { border-color: var(--ink); }
   .mini img, .mini .ph { width: 92px; height: 43px; border-radius: 2px; object-fit: cover; flex: none; filter: saturate(.8); }
-  .mini > div { min-width: 0; }
+  .mini > div { min-width: 0; flex: 1; }
   .mini b { display: block; font-weight: 500; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mini small { color: var(--muted); font-size: 12.5px; }
-  .cal-note { font-size: 12px; letter-spacing: .18em; color: var(--muted); text-transform: uppercase; margin: 22px 0 2px; }
-  .cal-month { font-family: var(--serif); font-size: 15px; color: var(--muted); margin: 22px 0 4px; letter-spacing: .04em; }
-  .cal-row { display: grid; grid-template-columns: 74px 1fr auto; gap: 16px; align-items: baseline; width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--line); padding: 11px 4px; min-width: 0; }
-  .cal-row:last-child { border-bottom: 1px solid var(--line); }
-  .cal-row:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
-  .cal-row .d { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
-  .cal-row b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .cal-row .w { color: var(--muted); font-size: 13px; white-space: nowrap; }
   .empty { color: var(--muted); font-size: 14px; }
 
   /* controls */
@@ -108,7 +100,9 @@
   .tags { font-size: 12.5px; color: var(--muted); }
   .tags b { font-weight: 400; color: var(--clay); }
   .meta { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--muted); }
-  .meta .hype { color: var(--clay); letter-spacing: 2px; }
+  .hype { display: inline-flex; gap: 2px; flex: none; font-size: 13px; line-height: 1; letter-spacing: 0; }
+  .hype .on { color: var(--clay); }
+  .hype .off { color: var(--line); }
   .soon { color: var(--accent); font-weight: 500; }
 
   /* side panel */
@@ -280,16 +274,23 @@ function fmtDate(d) {
   if (!d) return "Date to be announced";
   return new Date(d.length > 10 ? d : d + "T00:00:00").toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
-function whenLabel(g, countdownOnly = false) {
+function whenLine(g) {
   const n = daysUntil(g.release_date);
-  if (countdownOnly && n === 0) return '<span class="soon">Today</span>';
-  if (countdownOnly && !(n > 0)) return "";
+  return esc(fmtDate(g.release_date)) + (n > 0 ? ` · ${whenLabel(g)}` : n === 0 ? ' · <span class="soon">Today</span>' : "");
+}
+function whenLabel(g) {
+  const n = daysUntil(g.release_date);
   if (n !== null && n > 0) return `<span class="soon">${n === 1 ? "Tomorrow" : "In " + (n > 60 ? Math.round(n / 30) + " months" : n + " days")}</span>`;
   return esc(fmtDate(g.release_date));
 }
 function artBlock(g) {
   const a = art(g), [h1, h2] = hues(g.name);
   return `<div class="art" style="--h1:${h1};--h2:${h2}"><div class="fallback">${esc(g.name)}</div>${a ? `<img src="${esc(a)}" alt="" loading="lazy" onerror="this.remove()">` : ""}</div>`;
+}
+function hypeMeter(g) {
+  const n = HYPE_RANK[g.hype] || 0;
+  return `<span class="hype" role="img" aria-label="${n ? "Hype " + n + " of 3" : "Hype not set"}" title="${n ? "Hype " + n + " of 3" : "Hype not set"}">` +
+    [1, 2, 3].map(i => `<span class="${i <= n ? "on" : "off"}">★</span>`).join("") + "</span>";
 }
 const statusMark = g => g.status && !QUIET.has(g.status) ? `<span style="--c:${STATUS_COLOR[g.status]}"><i></i>${esc(g.status)}</span>` : "";
 
@@ -339,11 +340,15 @@ function mini(g, sub) {
   const ph = `<div class="ph" style="background:linear-gradient(135deg,${h1},${h2})"></div>`;
   return `<button class="mini" type="button" data-id="${esc(g.id)}">
     ${a ? `<img src="${esc(a)}" alt="" loading="lazy" onerror="this.outerHTML=this.dataset.ph" data-ph="${esc(ph)}">` : ph}
-    <div><b>${esc(g.name)}</b><small>${sub}</small></div></button>`;
+    <div><b>${esc(g.name)}</b><small>${sub}</small></div>${hypeMeter(g)}</button>`;
 }
 function renderShelves() {
   const ready = games.filter(g => g.installed && g.status === "Out").sort((a, b) => a.name.localeCompare(b.name));
   const playing = games.filter(g => g.status === "Playing");
+  // Every game with a release date except Early Access; what's coming first (soonest on top), then what's already out.
+  const dated = games.filter(g => g.release_date && g.status !== "Early Access")
+    .sort((a, b) => (daysUntil(a.release_date) < 0) - (daysUntil(b.release_date) < 0) ||
+      (daysUntil(a.release_date) < 0 ? b.release_date.localeCompare(a.release_date) : a.release_date.localeCompare(b.release_date)));
   const shelf = (title, note, items, sub, emptyMsg = "") => (items.length || emptyMsg) ?
     `<div class="shelf-title">${title}<small>${note}</small></div>` +
     (items.length ? `<div class="shelf">${items.map(g => mini(g, sub(g))).join("")}</div>` : `<p class="empty">${emptyMsg}</p>`) : "";
@@ -352,27 +357,8 @@ function renderShelves() {
     shelf("Ready to Play", "installed and out", ready,
       g => esc(g.time_to_beat ? g.time_to_beat + "h to beat" : "Ready to play"),
       "Nothing here yet. Open a game that is Out and switch on Installed.") +
-    calendar();
+    shelf("Release Calendar", "games with a release date", dated, g => whenLine(g));
 }
-// Every game with a release date except Early Access: what's coming first (soonest on top), then what's already out.
-function calendar() {
-  const dated = games.filter(g => g.release_date && g.status !== "Early Access");
-  if (!dated.length) return "";
-  const upcoming = dated.filter(g => daysUntil(g.release_date) >= 0).sort((a, b) => a.release_date.localeCompare(b.release_date));
-  const out = dated.filter(g => daysUntil(g.release_date) < 0).sort((a, b) => b.release_date.localeCompare(a.release_date));
-  const group = (title, list) => {
-    if (!list.length) return "";
-    let month = "";
-    return `<div class="cal-note">${title}</div>` + list.map(g => {
-      const m = new Date(g.release_date + "T00:00:00").toLocaleDateString(undefined, { month: "long", year: "numeric" });
-      const head = m !== month ? `<div class="cal-month">${esc(m)}</div>` : ""; month = m;
-      const day = new Date(g.release_date + "T00:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short" });
-      return `${head}<button class="cal-row" type="button" data-id="${esc(g.id)}"><span class="d">${esc(day)}</span><b>${esc(g.name)}</b><span class="w">${whenLabel(g, true)}</span></button>`;
-    }).join("");
-  };
-  return `<div class="shelf-title">Release Calendar<small>${dated.length} games with a release date</small></div>` + group("Upcoming", upcoming) + group("Already out", out);
-}
-
 function card(g, i) {
   const tags = [...g.genres.slice(0, 3).map(esc), ...g.platforms.map(p => `<b>${esc(p)}</b>`)].join(" · ");
   const extra = [g.time_to_beat ? g.time_to_beat + "h" : "", g.rating].filter(Boolean).map(esc).join(" · ");
@@ -383,7 +369,7 @@ function card(g, i) {
       ${g.developer ? `<div class="dev">${esc(g.developer)}</div>` : ""}
       <div class="state">${g.installed ? '<span style="--c:var(--accent)"><i></i>Installed</span>' : ""}${statusMark(g)}</div>
       <div class="tags">${tags}</div>
-      <div class="meta"><span>${whenLabel(g)}${extra ? " · " + extra : ""}</span>${g.hype ? `<span class="hype" title="Hype">${esc(g.hype)}</span>` : ""}</div>
+      <div class="meta"><span>${whenLabel(g)}${extra ? " · " + extra : ""}</span>${hypeMeter(g)}</div>
     </div></article>`;
 }
 
