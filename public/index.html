@@ -133,6 +133,14 @@
   .opt[aria-pressed="true"] { font-weight: 700; }
   .opt[aria-pressed="true"] .tick { visibility: visible; }
   .opt:disabled { opacity: .5; cursor: progress; }
+  .switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; background: none; border: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 13px 4px; font-size: 15px; text-align: left; }
+  .switch:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+  .switch:disabled { opacity: .5; cursor: progress; }
+  .switch small { display: block; color: var(--muted); font-size: 12.5px; }
+  .track { flex: none; width: 38px; height: 22px; border-radius: 11px; border: 1px solid var(--muted); position: relative; transition: background .2s, border-color .2s; }
+  .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: transform .2s, background .2s; }
+  .switch[aria-checked="true"] .track { background: var(--accent); border-color: var(--accent); }
+  .switch[aria-checked="true"] .track::after { transform: translateX(16px); background: var(--accent-ink); }
   .plinks { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 6px; }
   .plinks a { font-size: 14px; border-bottom: 1px solid var(--line); padding-bottom: 2px; text-decoration: none; }
   .plinks a:hover { border-color: var(--ink); }
@@ -343,8 +351,7 @@ function mini(g, sub) {
     <div><b>${esc(g.name)}</b><small>${sub}</small></div></button>`;
 }
 function renderShelves() {
-  const installed = games.filter(g => g.installed)
-    .sort((a, b) => (a.status === "Playing" ? 0 : 1) - (b.status === "Playing" ? 0 : 1) || a.name.localeCompare(b.name));
+  const ready = games.filter(g => g.installed && g.status === "Out").sort((a, b) => a.name.localeCompare(b.name));
   const playing = games.filter(g => g.status === "Playing");
   const upcoming = games.filter(g => g.status === "Unreleased" && daysUntil(g.release_date) > 0)
     .sort((a, b) => a.release_date.localeCompare(b.release_date)).slice(0, 4);
@@ -352,10 +359,10 @@ function renderShelves() {
     `<div class="shelf-title">${title}<small>${note}</small></div>` +
     (items.length ? `<div class="shelf">${items.map(g => mini(g, sub(g))).join("")}</div>` : `<p class="empty">${emptyMsg}</p>`) : "";
   $("shelves").innerHTML =
-    shelf("Ready to Play", "installed on your machine", installed,
-      g => esc([QUIET.has(g.status) ? "" : g.status, g.time_to_beat ? g.time_to_beat + "h to beat" : ""].filter(Boolean).join(" · ") || "Installed"),
-      "Nothing installed yet. Tick “Installed” in Notion and the game appears here.") +
     shelf("Now playing", "", playing, g => esc(g.developer || "In progress")) +
+    shelf("Ready to Play", "installed and out", ready,
+      g => esc(g.time_to_beat ? g.time_to_beat + "h to beat" : "Ready to play"),
+      "Nothing here yet. Open a game that is Out and switch on Installed.") +
     shelf("Coming soon", "", upcoming, g => whenLabel(g));
 }
 function card(g, i) {
@@ -398,8 +405,12 @@ function paintPanel(g) {
       <dl class="facts" style="margin-top:8px">
         ${fact("Release", g.release_date ? fmtDate(g.release_date) : "")}${fact("Length", g.time_to_beat ? g.time_to_beat + " hours" : "")}
         ${fact("Genre", g.genres.join(", "))}${fact("Platform", g.platforms.join(", "))}
-        ${fact("Hype", g.hype)}${fact("Your rating", g.rating)}${fact("Installed", g.installed ? "Yes" : "")}
+        ${fact("Hype", g.hype)}${fact("Your rating", g.rating)}
       </dl>
+      <div class="label">Installed</div>
+      <button class="switch" id="pInstalled" type="button" role="switch" aria-checked="${g.installed}">
+        <span>Installed on your machine<small>Out games that are installed appear in Ready to Play</small></span><span class="track"></span>
+      </button>
       <div class="label" id="pStatusLabel">Status</div>
       <div class="opts" role="group" aria-labelledby="pStatusLabel">
         ${STATUS_ORDER.map(s => `<button class="opt" type="button" data-status="${s}" aria-pressed="${g.status === s}" style="--c:${STATUS_COLOR[s]}"><i></i>${s}<span class="tick">✓</span></button>`).join("")}
@@ -414,26 +425,29 @@ function toast(msg, bad = false) {
   const t = $("toast"); t.textContent = msg; t.classList.toggle("bad", bad); t.classList.add("show");
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2600);
 }
-async function setStatus(id, status) {
-  const g = games.find(x => x.id === id); if (!g || g.status === status) return;
-  const prev = g.status;
-  g.status = status; render(); paintPanel(g);                 // optimistic, rolled back on failure
-  if (DEMO) return toast(`${g.name}: ${status}`);
-  const busy = $("pBody").querySelectorAll(".opt"); busy.forEach(b => b.disabled = true);
+// Optimistic update of one field on one game; rolled back with a message if Notion can't save it.
+async function change(id, field, value, path, message) {
+  const g = games.find(x => x.id === id); if (!g || g[field] === value) return;
+  const prev = g[field];
+  g[field] = value; render(); paintPanel(g);
+  if (DEMO) return toast(message(g));
+  $("pBody").querySelectorAll(".opt, .switch").forEach(b => b.disabled = true);
   try {
-    const r = await fetch("/api/game-status", {
+    const r = await fetch(path, {
       method: "POST", headers: { "content-type": "application/json", "x-secret-key": store.get("gbb-key") || "" },
-      body: JSON.stringify({ id, status }),
+      body: JSON.stringify({ id, [field]: value }),
     });
     if (r.status === 401) { store.del("gbb-key"); throw new Error("Your key is no longer valid. Reload to enter it again."); }
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
-    toast(`${g.name}: ${status}`);
+    toast(message(g));
   } catch (e) {
-    g.status = prev; render();
+    g[field] = prev; render();
     if (openId === id) paintPanel(g);
     toast(`Not saved. ${e.message}`, true);
   }
 }
+const setStatus = (id, status) => change(id, "status", status, "/api/game-status", g => `${g.name}: ${status}`);
+const setInstalled = (id, on) => change(id, "installed", on, "/api/game-installed", g => `${g.name}: ${on ? "installed" : "not installed"}`);
 
 /* ── events ── */
 let t; $("q").addEventListener("input", e => { clearTimeout(t); t = setTimeout(() => { state.q = e.target.value.trim(); render(); }, 120); });
@@ -445,7 +459,11 @@ for (const id of ["grid", "shelves"]) {
 $("grid").addEventListener("keydown", e => {
   const c = e.target.closest(".card"); if (c && e.target === c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openPanel(c.dataset.id); }
 });
-$("pBody").addEventListener("click", e => { const b = e.target.closest(".opt"); if (b && openId) setStatus(openId, b.dataset.status); });
+$("pBody").addEventListener("click", e => {
+  if (!openId) return;
+  const b = e.target.closest(".opt"); if (b) return setStatus(openId, b.dataset.status);
+  const sw = e.target.closest(".switch"); if (sw) setInstalled(openId, sw.getAttribute("aria-checked") !== "true");
+});
 $("pClose").onclick = closePanel; $("scrim").onclick = closePanel;
 document.addEventListener("keydown", e => { if (e.key === "Escape") closePanel(); });
 $("refresh").onclick = () => { closePanel(); load(); };
