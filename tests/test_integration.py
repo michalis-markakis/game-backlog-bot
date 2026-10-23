@@ -395,3 +395,34 @@ class TestGamesFeed:
         c = TestClient(bot.app)
         assert c.get("/api/games").status_code == 401
         assert c.get("/api/games", headers={"x-secret-key": "nope"}).status_code == 401
+
+
+class TestStatusChange:
+    PID = "3fa50bcb-4868-81fa-bdb6-cca3e55d5189"
+    H = {"x-secret-key": "test-secret"}
+
+    @respx.mock
+    async def test_update_status_patches_the_select(self):
+        route = respx.patch(f"https://api.notion.com/v1/pages/{self.PID}").mock(
+            return_value=httpx.Response(200, json={}))
+        await notion.update_status(self.PID, "Playing")
+        assert b'"Playing"' in route.calls[0].request.content
+
+    async def test_update_status_rejects_unknown_status(self):
+        with pytest.raises(ValueError):
+            await notion.update_status(self.PID, "Nope")
+
+    def test_endpoint_requires_key_and_valid_input(self):
+        from fastapi.testclient import TestClient
+        c = TestClient(bot.app)
+        body = {"id": self.PID, "status": "Playing"}
+        assert c.post("/api/game-status", json=body).status_code == 401
+        assert c.post("/api/game-status", json={**body, "status": "Nope"}, headers=self.H).status_code == 422
+        assert c.post("/api/game-status", json={"id": "../users", "status": "Out"}, headers=self.H).status_code == 422
+
+    @respx.mock
+    def test_endpoint_saves_status(self):
+        from fastapi.testclient import TestClient
+        respx.patch(f"https://api.notion.com/v1/pages/{self.PID}").mock(return_value=httpx.Response(200, json={}))
+        r = TestClient(bot.app).post("/api/game-status", json={"id": self.PID, "status": "Finished"}, headers=self.H)
+        assert r.status_code == 200 and r.json() == {"ok": True}

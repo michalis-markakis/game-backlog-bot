@@ -122,3 +122,13 @@ async def list_games() -> list[dict]:
             if not data.get("has_more"):
                 return games
             cursor = data.get("next_cursor")
+
+
+async def update_status(page_id: str, status: str) -> None:
+    """Set the Status select on an existing To Play page."""
+    if status not in _STATUSES:
+        raise ValueError(f"unknown status: {status}")
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.patch(f"https://api.notion.com/v1/pages/{page_id}", headers=NOTION_HEADERS,
+                               json={"properties": {"Status": {"select": {"name": status}}}})
+    r.raise_for_status()
