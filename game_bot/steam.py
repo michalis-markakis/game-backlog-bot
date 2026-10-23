@@ -111,3 +111,35 @@ async def appdetails(appid: str) -> dict:
     except Exception as e:
         print(f"[steam] appdetails failed: {e}")
         return {}
+
+
+def _https(url: str) -> str:
+    """Steam still returns some media URLs over http; the dashboard is served over https."""
+    return "https://" + url[len("http://"):] if (url or "").startswith("http://") else (url or "")
+
+
+async def media(appid: str) -> dict:
+    """
+    The game's highlighted Steam trailer as a short looping clip: {video, webm, poster}.
+    Returns {} when the app has no mp4/webm trailer (the dashboard then keeps the still image).
+    """
+    if not str(appid).isdigit():
+        return {}
+    try:
+        async with httpx.AsyncClient(timeout=12) as client:
+            r = await client.get("https://store.steampowered.com/api/appdetails",
+                                 params={"appids": appid, "l": "english"})
+        if r.status_code != 200:
+            return {}
+        entry = (r.json() or {}).get(str(appid), {})
+        movies = (entry.get("data") or {}).get("movies") or [] if entry.get("success") else []
+    except Exception as e:
+        print(f"[steam] media failed: {e}")
+        return {}
+    for m in movies:
+        mp4, webm = m.get("mp4") or {}, m.get("webm") or {}
+        video = _https(mp4.get("480") or mp4.get("max") or "")
+        alt = _https(webm.get("480") or webm.get("max") or "")
+        if video or alt:
+            return {"video": video, "webm": alt, "poster": _https(m.get("thumbnail") or "")}
+    return {}

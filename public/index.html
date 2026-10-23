@@ -124,7 +124,13 @@
   body.panel-open .scrim { opacity: 1; visibility: visible; }
   body.panel-open .panel { transform: none; }
   #pBody { overflow-y: auto; overscroll-behavior: contain; }
-  .panel .art { border-radius: 0; aspect-ratio: 460/150; }
+  .panel .art { border-radius: 0; aspect-ratio: 16/7; }
+  .panel .art .fallback { display: none; }
+  .art video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .6s; filter: saturate(.85); }
+  .art video.ready { opacity: 1; }
+  .art[data-demo]::before { content: "trailer loop"; position: absolute; left: 12px; top: 14px; z-index: 2; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #f4efe6; background: rgba(20,18,15,.5); padding: 3px 10px; border-radius: 999px; }
+  .art[data-demo] { background-size: 240% 100%; animation: pan 7s ease-in-out infinite alternate; }
+  @keyframes pan { to { background-position: 100% 0; } }
   .panel .art::after { content: ""; position: absolute; inset: auto 0 0 0; height: 45%; background: linear-gradient(transparent, var(--surface)); }
   .panel .inner { position: relative; margin-top: -30px; padding: 0 28px 28px; display: flex; flex-direction: column; gap: 10px; }
   .panel h2 { font-family: var(--serif); font-weight: 500; font-size: 28px; letter-spacing: .02em; line-height: 1.25; text-wrap: balance; }
@@ -220,7 +226,7 @@
 <div class="scrim" id="scrim" aria-hidden="true">
   <div class="panel" id="panel" role="dialog" aria-modal="true" aria-labelledby="pTitle">
     <button class="close" id="pClose" type="button" aria-label="Close">×</button>
-    <div id="pBody"></div>
+    <div id="pBody"><div id="pHero"></div><div class="inner" id="pInner"></div></div>
   </div>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -393,14 +399,15 @@ function card(g, i) {
 function openPanel(id) {
   const g = games.find(x => x.id === id); if (!g) return;
   lastFocus = document.activeElement; openId = id;
-  paintPanel(g);
+  $("pHero").innerHTML = artBlock(g); paintPanel(g); loadClip(g);
   document.body.classList.add("panel-open"); $("scrim").setAttribute("aria-hidden", "false");
   document.querySelectorAll(".card").forEach(c => c.classList.toggle("sel", c.dataset.id === id));
   $("pClose").focus({ preventScroll: true });
 }
 function closePanel() {
   if (!openId) return;
-  openId = null; document.body.classList.remove("panel-open"); $("scrim").setAttribute("aria-hidden", "true");
+  openId = null; $("pHero").querySelectorAll("video").forEach(v => v.pause());
+  document.body.classList.remove("panel-open"); $("scrim").setAttribute("aria-hidden", "true");
   document.querySelectorAll(".card.sel").forEach(c => c.classList.remove("sel"));
   if (lastFocus && document.contains(lastFocus)) lastFocus.focus({ preventScroll: true });
 }
@@ -409,8 +416,7 @@ function paintPanel(g) {
     .filter(([, u]) => safeUrl(u)).map(([l, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${l}</a>`).join("");
   const fact = (k, v) => v ? `<dt>${k}</dt><dd>${esc(v)}</dd>` : "";
   $("panel").classList.toggle("hot", g.hype === "★★★");
-  $("pBody").innerHTML = `${artBlock(g)}
-    <div class="inner">
+  $("pInner").innerHTML = `
       <h2 id="pTitle">${esc(g.name)}</h2>
       <div class="state">${hypeMeter(g)}${g.installed ? '<span style="--c:var(--accent)"><i></i>Installed</span>' : ""}${statusMark(g)}</div>
       ${g.developer ? `<div class="dev">${esc(g.developer)}</div>` : ""}
@@ -427,8 +433,28 @@ function paintPanel(g) {
       <div class="opts" role="group" aria-labelledby="pStatusLabel">
         ${STATUS_ORDER.map(s => `<button class="opt" type="button" data-status="${s}" aria-pressed="${g.status === s}" style="--c:${STATUS_COLOR[s]}"><i></i>${s}</button>`).join("")}
       </div>
-      ${links ? `<div class="label">Links</div><div class="plinks">${links}</div>` : ""}
-    </div>`;
+      ${links ? `<div class="label">Links</div><div class="plinks">${links}</div>` : ""}`;
+}
+
+// The pop-up headline: the game's Steam trailer as a muted loop, like a GIF. Falls back to the still image.
+const clips = new Map();
+async function loadClip(g) {
+  const appid = steamId(g), hero = $("pHero").querySelector(".art");
+  if (!appid || !hero || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  if (DEMO) { hero.dataset.demo = ""; return; }                    // preview: stand-in motion only
+  if (!clips.has(appid)) {
+    clips.set(appid, fetch(`/api/game-media?appid=${appid}`, { headers: { "x-secret-key": store.get("gbb-key") || "" } })
+      .then(r => r.ok ? r.json() : {}).catch(() => ({})));
+  }
+  const m = await clips.get(appid);
+  if (openId !== g.id || !(m.video || m.webm)) return;
+  const v = document.createElement("video");
+  v.muted = v.loop = v.playsInline = true; v.autoplay = true; v.preload = "auto"; v.disablePictureInPicture = true;
+  v.setAttribute("aria-hidden", "true"); if (m.poster) v.poster = m.poster;
+  v.innerHTML = [m.video && `<source src="${esc(m.video)}" type="video/mp4">`, m.webm && `<source src="${esc(m.webm)}" type="video/webm">`].filter(Boolean).join("");
+  v.addEventListener("playing", () => v.classList.add("ready"), { once: true });
+  v.addEventListener("error", () => v.remove(), true);
+  hero.appendChild(v); v.play().catch(() => {});
 }
 
 /* ── status changes ── */

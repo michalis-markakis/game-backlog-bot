@@ -452,3 +452,37 @@ class TestInstalledFlag:
         respx.patch(f"https://api.notion.com/v1/pages/{self.PID}").mock(return_value=httpx.Response(200, json={}))
         r = TestClient(bot.app).post("/api/game-installed", json={"id": self.PID, "installed": False}, headers=self.H)
         assert r.status_code == 200 and r.json() == {"ok": True}
+
+
+class TestGameMedia:
+    H = {"x-secret-key": "test-secret"}
+    STEAM = "https://store.steampowered.com/api/appdetails"
+
+    @respx.mock
+    async def test_media_picks_the_highlighted_clip_over_https(self):
+        respx.get(self.STEAM).mock(return_value=httpx.Response(200, json={"1796470": {"success": True, "data": {"movies": [
+            {"thumbnail": "http://cdn/p.jpg", "mp4": {"480": "http://cdn/m480.mp4", "max": "http://cdn/max.mp4"},
+             "webm": {"480": "http://cdn/m480.webm"}}]}}}))
+        m = await steam.media("1796470")
+        assert m == {"video": "https://cdn/m480.mp4", "webm": "https://cdn/m480.webm", "poster": "https://cdn/p.jpg"}
+
+    @respx.mock
+    async def test_media_empty_when_no_trailer_or_error(self):
+        respx.get(self.STEAM).mock(return_value=httpx.Response(200, json={"1": {"success": True, "data": {}}}))
+        assert await steam.media("1") == {}
+        respx.get(self.STEAM).mock(return_value=httpx.Response(500))
+        assert await steam.media("1") == {}
+        assert await steam.media("../x") == {}
+
+    @respx.mock
+    def test_endpoint_needs_key_and_a_numeric_appid_and_caches(self):
+        from fastapi.testclient import TestClient
+        bot._MEDIA.clear()
+        route = respx.get(self.STEAM).mock(return_value=httpx.Response(200, json={"42": {"success": True, "data": {"movies": [
+            {"mp4": {"480": "https://cdn/a.mp4"}}]}}}))
+        c = TestClient(bot.app)
+        assert c.get("/api/game-media?appid=42").status_code == 401
+        assert c.get("/api/game-media?appid=abc", headers=self.H).status_code == 422
+        assert c.get("/api/game-media?appid=42", headers=self.H).json()["video"] == "https://cdn/a.mp4"
+        c.get("/api/game-media?appid=42", headers=self.H)
+        assert route.call_count == 1
