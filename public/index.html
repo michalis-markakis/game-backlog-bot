@@ -66,7 +66,7 @@
   .mini:hover { border-color: var(--ink); }
   .mini img, .mini .ph { width: 72px; height: 34px; border-radius: 2px; object-fit: cover; flex: none; filter: saturate(.8); }
   .mini > div { min-width: 0; flex: 1; }
-  .mini b { display: block; font-weight: 500; font-size: 13.5px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mini b { display: block; font-weight: 500; font-size: 13.5px; line-height: 1.35; overflow-wrap: anywhere; }
   .mini small { color: var(--muted); font-size: 12px; }
   .mini.hot, .card.hot { border-left: 3px solid var(--clay); background: color-mix(in srgb, var(--clay) 9%, var(--surface)); }
   .mini.hot:hover { border-color: var(--clay); }
@@ -190,6 +190,8 @@
     .shelf::-webkit-scrollbar, .tabs::-webkit-scrollbar { display: none; }
     .mini { flex: 0 0 min(80%, 300px); scroll-snap-align: start; min-height: 52px; }
     .mini:only-child { flex-basis: 100%; }
+    .shelf.list { display: grid; grid-template-columns: 1fr; overflow: visible; }
+    .shelf.list .mini { flex: none; }
     .controls { position: static; padding: 8px 0 2px; margin-top: 14px; }
     .row { gap: 0 12px; }
     .search { flex: 1 1 100%; font-size: 16px; padding: 11px 0; }
@@ -423,9 +425,9 @@ function renderShelves() {
   const ready = games.filter(g => g.installed && g.status === "Out").sort((a, b) => a.name.localeCompare(b.name));
   const playing = games.filter(g => g.status === "Playing");
   // Every game with a release date except Early Access; what's coming first (soonest on top), then what's already out.
-  const dated = games.filter(g => g.release_date && g.status !== "Early Access")
-    .sort((a, b) => (daysUntil(a.release_date) < 0) - (daysUntil(b.release_date) < 0) ||
-      (daysUntil(a.release_date) < 0 ? b.release_date.localeCompare(a.release_date) : a.release_date.localeCompare(b.release_date)));
+  // Release Calendar: every game with a confirmed (exact) release date that is today or later, except Early Access. Soonest first, no cap.
+  const dated = games.filter(g => g.release_date && daysUntil(g.release_date) >= 0 && g.status !== "Early Access")
+    .sort((a, b) => a.release_date.localeCompare(b.release_date));
   // Three stars, status Out, not installed yet: released games you're excited about and haven't set up.
   const hyped = games.filter(g => g.hype === "★★★" && g.status === "Out" && !g.installed)
     .sort((a, b) => (b.release_date || "").localeCompare(a.release_date || ""));
@@ -439,7 +441,7 @@ function renderShelves() {
       "Nothing here yet. Open a game that is Out and switch on Installed.") +
     shelf("Most Hyped", "three stars, out, not installed", hyped,
       g => esc([g.developer, g.time_to_beat ? g.time_to_beat + "h to beat" : ""].filter(Boolean).join(" · ")), "", "hot") +
-    shelf("Release Calendar", "games with a release date", dated, g => whenLine(g));
+    shelf("Release Calendar", `${dated.length} upcoming, confirmed date`, dated, g => whenLine(g), "", "list");
 }
 function card(g, i) {
   const tags = [...g.genres.slice(0, 3).map(esc), ...g.platforms.map(p => `<b>${esc(p)}</b>`)].join(" · ");
