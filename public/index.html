@@ -66,8 +66,9 @@
   .mini > div { min-width: 0; flex: 1; }
   .mini b { display: block; font-weight: 500; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mini small { color: var(--muted); font-size: 12.5px; }
-  .shelf.hot .mini { border-left: 3px solid var(--clay); background: color-mix(in srgb, var(--clay) 9%, var(--surface)); }
-  .shelf.hot .mini:hover { border-color: var(--clay); }
+  .mini.hot, .card.hot { border-left: 3px solid var(--clay); background: color-mix(in srgb, var(--clay) 9%, var(--surface)); }
+  .mini.hot:hover { border-color: var(--clay); }
+  .card.hot:hover, .card.hot.sel { border-color: var(--ink) var(--ink) var(--ink) var(--clay); }
   .hot-title { color: var(--clay); }
   .empty { color: var(--muted); font-size: 14px; }
 
@@ -341,7 +342,7 @@ function render() {
 function mini(g, sub) {
   const a = art(g), [h1, h2] = hues(g.name);
   const ph = `<div class="ph" style="background:linear-gradient(135deg,${h1},${h2})"></div>`;
-  return `<button class="mini" type="button" data-id="${esc(g.id)}">
+  return `<button class="mini${g.hype === "★★★" ? " hot" : ""}" type="button" data-id="${esc(g.id)}">
     ${a ? `<img src="${esc(a)}" alt="" loading="lazy" onerror="this.outerHTML=this.dataset.ph" data-ph="${esc(ph)}">` : ph}
     <div><b>${esc(g.name)}</b><small>${sub}</small></div>${hypeMeter(g)}</button>`;
 }
@@ -370,7 +371,7 @@ function renderShelves() {
 function card(g, i) {
   const tags = [...g.genres.slice(0, 3).map(esc), ...g.platforms.map(p => `<b>${esc(p)}</b>`)].join(" · ");
   const extra = [g.time_to_beat ? g.time_to_beat + "h" : "", g.rating].filter(Boolean).map(esc).join(" · ");
-  return `<article class="card${g.id === openId ? " sel" : ""}" tabindex="0" role="button" data-id="${esc(g.id)}" aria-label="${esc(g.name)}, open details" style="animation-delay:${Math.min(i, 12) * 25}ms">
+  return `<article class="card${g.hype === "★★★" ? " hot" : ""}${g.id === openId ? " sel" : ""}" tabindex="0" role="button" data-id="${esc(g.id)}" aria-label="${esc(g.name)}, open details" style="animation-delay:${Math.min(i, 12) * 25}ms">
     ${artBlock(g)}
     <div class="body">
       <h3>${esc(g.name)}</h3>
