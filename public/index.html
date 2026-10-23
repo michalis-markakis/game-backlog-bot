@@ -426,9 +426,10 @@ function renderShelves() {
   const dated = games.filter(g => g.release_date && g.status !== "Early Access")
     .sort((a, b) => (daysUntil(a.release_date) < 0) - (daysUntil(b.release_date) < 0) ||
       (daysUntil(a.release_date) < 0 ? b.release_date.localeCompare(a.release_date) : a.release_date.localeCompare(b.release_date)));
-  // Released games you rated three stars: Out, so not yet started, finished or dropped.
-  const hyped = games.filter(g => g.status === "Out" && g.hype === "★★★")
-    .sort((a, b) => (b.release_date || "").localeCompare(a.release_date || ""));
+  // Everything you rated three stars that isn't installed yet, whatever its status: what's coming soonest first, then what's out, undated last.
+  const phase = g => !g.release_date ? 2 : daysUntil(g.release_date) >= 0 ? 0 : 1;
+  const hyped = games.filter(g => g.hype === "★★★" && !g.installed)
+    .sort((a, b) => phase(a) - phase(b) || (phase(a) === 0 ? a.release_date.localeCompare(b.release_date) : (b.release_date || "").localeCompare(a.release_date || "")));
   const shelf = (title, note, items, sub, emptyMsg = "", cls = "") => (items.length || emptyMsg) ?
     `<div class="shelf-title ${cls ? cls + "-title" : ""}">${title}<small>${note}</small></div>` +
     (items.length ? `<div class="shelf ${cls}">${items.map(g => mini(g, sub(g))).join("")}</div>` : `<p class="empty">${emptyMsg}</p>`) : "";
@@ -437,8 +438,8 @@ function renderShelves() {
     shelf("Ready to Play", "installed and out", ready,
       g => esc(g.time_to_beat ? g.time_to_beat + "h to beat" : "Ready to play"),
       "Nothing here yet. Open a game that is Out and switch on Installed.") +
-    shelf("Most Hyped", "released, three stars", hyped,
-      g => esc([g.developer, g.time_to_beat ? g.time_to_beat + "h to beat" : ""].filter(Boolean).join(" · ")), "", "hot") +
+    shelf("Most Hyped", "three stars, not installed", hyped,
+      g => daysUntil(g.release_date) > 0 ? whenLine(g) : esc([g.developer, g.time_to_beat ? g.time_to_beat + "h to beat" : ""].filter(Boolean).join(" · ")), "", "hot") +
     shelf("Release Calendar", "games with a release date", dated, g => whenLine(g));
 }
 function card(g, i) {
