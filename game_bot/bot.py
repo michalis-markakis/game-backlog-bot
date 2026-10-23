@@ -9,7 +9,8 @@ from __future__ import annotations
 import re
 import uuid
 import hmac
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Query
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from .config import TELEGRAM_USER_ID, NOTION_DB_GAME, SECRET_KEY
@@ -107,6 +108,18 @@ async def games(request: Request):
 
 
 _PAGE_ID = r"^[0-9a-fA-F-]{32,36}$"                      # a Notion page id, nothing else
+
+
+_MEDIA: dict = {}          # appid -> clip info, kept for the life of the serverless instance
+
+
+@app.get("/api/game-media")
+async def game_media(request: Request, appid: str = Query(pattern=r"^\d{1,10}$")):
+    """The Steam trailer clip for a game's pop-up headline; empty when there isn't one."""
+    _require_key(request)
+    if appid not in _MEDIA:
+        _MEDIA[appid] = await steam.media(appid)
+    return JSONResponse(_MEDIA[appid], headers={"Cache-Control": "private, max-age=3600"})
 
 
 class StatusChange(BaseModel):
