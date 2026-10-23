@@ -426,3 +426,29 @@ class TestStatusChange:
         respx.patch(f"https://api.notion.com/v1/pages/{self.PID}").mock(return_value=httpx.Response(200, json={}))
         r = TestClient(bot.app).post("/api/game-status", json={"id": self.PID, "status": "Finished"}, headers=self.H)
         assert r.status_code == 200 and r.json() == {"ok": True}
+
+
+class TestInstalledFlag:
+    PID = "3fa50bcb-4868-81fa-bdb6-cca3e55d5189"
+    H = {"x-secret-key": "test-secret"}
+
+    @respx.mock
+    async def test_set_installed_patches_the_checkbox(self):
+        route = respx.patch(f"https://api.notion.com/v1/pages/{self.PID}").mock(
+            return_value=httpx.Response(200, json={}))
+        await notion.set_installed(self.PID, True)
+        assert b'"Installed"' in route.calls[0].request.content and b"true" in route.calls[0].request.content
+
+    def test_endpoint_requires_key_and_valid_input(self):
+        from fastapi.testclient import TestClient
+        c = TestClient(bot.app)
+        assert c.post("/api/game-installed", json={"id": self.PID, "installed": True}).status_code == 401
+        assert c.post("/api/game-installed", json={"id": "../x", "installed": True}, headers=self.H).status_code == 422
+        assert c.post("/api/game-installed", json={"id": self.PID, "installed": "maybe"}, headers=self.H).status_code == 422
+
+    @respx.mock
+    def test_endpoint_saves_flag(self):
+        from fastapi.testclient import TestClient
+        respx.patch(f"https://api.notion.com/v1/pages/{self.PID}").mock(return_value=httpx.Response(200, json={}))
+        r = TestClient(bot.app).post("/api/game-installed", json={"id": self.PID, "installed": False}, headers=self.H)
+        assert r.status_code == 200 and r.json() == {"ok": True}

@@ -106,9 +106,17 @@ async def games(request: Request):
         raise HTTPException(status_code=502, detail="Could not read Notion")
 
 
+_PAGE_ID = r"^[0-9a-fA-F-]{32,36}$"                      # a Notion page id, nothing else
+
+
 class StatusChange(BaseModel):
-    id: str = Field(pattern=r"^[0-9a-fA-F-]{32,36}$")      # a Notion page id, nothing else
+    id: str = Field(pattern=_PAGE_ID)
     status: str
+
+
+class InstalledChange(BaseModel):
+    id: str = Field(pattern=_PAGE_ID)
+    installed: bool
 
 
 @app.post("/api/game-status")
@@ -121,6 +129,18 @@ async def game_status(change: StatusChange, request: Request):
         await notion.update_status(change.id, change.status)
     except Exception as e:
         print(f"[notion] status update failed: {e}")
+        raise HTTPException(status_code=502, detail="Could not save to Notion")
+    return {"ok": True}
+
+
+@app.post("/api/game-installed")
+async def game_installed(change: InstalledChange, request: Request):
+    """Tick or untick a game's Installed flag from the dashboard's side panel."""
+    _require_key(request)
+    try:
+        await notion.set_installed(change.id, change.installed)
+    except Exception as e:
+        print(f"[notion] installed update failed: {e}")
         raise HTTPException(status_code=502, detail="Could not save to Notion")
     return {"ok": True}
 
