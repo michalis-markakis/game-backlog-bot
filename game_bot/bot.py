@@ -10,6 +10,7 @@ import re
 import uuid
 import hmac
 from fastapi import FastAPI, Request, HTTPException
+from pydantic import BaseModel, Field
 
 from .config import TELEGRAM_USER_ID, NOTION_DB_GAME, SECRET_KEY
 from .text_utils import clean_field
@@ -85,19 +86,43 @@ async def health():
     return {"ok": True, "v": "early-access-1"}
 
 
-@app.get("/api/games")
-async def games(request: Request):
-    """Read-only feed for the dashboard in public/index.html; guarded by SECRET_KEY."""
+def _require_key(request: Request) -> None:
+    """Guard for the dashboard endpoints: the caller must present SECRET_KEY."""
     given = request.headers.get("x-secret-key", "")
     if not hmac.compare_digest(given.encode(), SECRET_KEY.encode()):
         raise HTTPException(status_code=401, detail="Invalid key")
     if not NOTION_DB_GAME:
         raise HTTPException(status_code=503, detail="NOTION_DB_GAME not configured")
+
+
+@app.get("/api/games")
+async def games(request: Request):
+    """Read-only feed for the dashboard in public/index.html; guarded by SECRET_KEY."""
+    _require_key(request)
     try:
         return {"games": await notion.list_games()}
     except Exception as e:
         print(f"[notion] list failed: {e}")
         raise HTTPException(status_code=502, detail="Could not read Notion")
+
+
+class StatusChange(BaseModel):
+    id: str = Field(pattern=r"^[0-9a-fA-F-]{32,36}$")      # a Notion page id, nothing else
+    status: str
+
+
+@app.post("/api/game-status")
+async def game_status(change: StatusChange, request: Request):
+    """Change one game's Status from the dashboard's side panel."""
+    _require_key(request)
+    if change.status not in _VALID_STATUS:
+        raise HTTPException(status_code=422, detail=f"Status must be one of: {', '.join(_VALID_STATUS)}")
+    try:
+        await notion.update_status(change.id, change.status)
+    except Exception as e:
+        print(f"[notion] status update failed: {e}")
+        raise HTTPException(status_code=502, detail="Could not save to Notion")
+    return {"ok": True}
 
 
 # ── Handlers ──────────────────────────────────────────────────────────────────
