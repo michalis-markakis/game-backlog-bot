@@ -9,12 +9,13 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;600&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
 <style>
-  /* Japandi: washi paper, sumi ink, sage and clay. Hairlines instead of shadows, one open side panel for actions. */
+  /* Japandi: washi paper, sumi ink, sage and clay. Hairlines instead of shadows, one pop-up per game for actions. */
   :root {
     --bg: #efebe3; --surface: #f7f4ee; --ink: #2a2724; --muted: #7b756b; --line: #dad4c8;
     --accent: #6f7f6a; --accent-ink: #f7f4ee; --clay: #a47e63; --scrim: rgba(42,39,36,.28);
     --s-unreleased: #9a948a; --s-early: #b58a4e; --s-out: #7e8c74;
     --s-playing: #5e7487; --s-finished: #8a6f86; --s-abandoned: #a86258;
+    --pop-bg: #25221e; --pop-ink: #ece7dd; --pop-muted: #a39c90; --pop-line: #3b362f; --pop-accent: #a3b39a; --pop-clay: #c29a7e;
     --serif: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", Georgia, serif;
     --sans: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, -apple-system, "Segoe UI", sans-serif;
   }
@@ -109,32 +110,37 @@
   .hype .off { color: var(--line); }
   .soon { color: var(--accent); font-weight: 500; }
 
-  /* side panel */
-  .scrim { position: fixed; inset: 0; background: var(--scrim); opacity: 0; visibility: hidden; transition: opacity .25s, visibility .25s; z-index: 20; }
+  /* pop-up: a dark ink card centred over a dimmed, blurred page */
+  .scrim { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 20px; background: var(--scrim); backdrop-filter: blur(5px); opacity: 0; visibility: hidden; transition: opacity .25s, visibility .25s; }
   .panel {
-    position: fixed; top: 0; right: 0; bottom: 0; width: min(420px, 100vw); background: var(--surface); border-left: 1px solid var(--line);
-    transform: translateX(100%); visibility: hidden; transition: transform .3s ease, visibility .3s; z-index: 21; overflow-y: auto;
-    padding-block: 0 32px; padding-right: env(safe-area-inset-right, 0px);
+    --surface: var(--pop-bg); --ink: var(--pop-ink); --muted: var(--pop-muted); --line: var(--pop-line);
+    --accent: var(--pop-accent); --accent-ink: var(--pop-bg); --clay: var(--pop-clay);
+    --s-unreleased: #8d877d; --s-early: #cfa468; --s-out: #9aa78f; --s-playing: #89a0b3; --s-finished: #b494ae; --s-abandoned: #c98479;
+    position: relative; display: flex; flex-direction: column; width: min(560px, 100%); max-height: calc(100vh - 40px);
+    background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0,0,0,.45); transform: translateY(14px) scale(.98); transition: transform .28s ease;
   }
+  .panel.hot { border-top: 3px solid var(--clay); }
   body.panel-open .scrim { opacity: 1; visibility: visible; }
-  body.panel-open .panel { transform: none; visibility: visible; }
-  .panel .art { border-radius: 0; }
-  .panel .inner { padding: 22px 24px 0; display: flex; flex-direction: column; gap: 10px; }
-  .panel h2 { font-family: var(--serif); font-weight: 500; font-size: 24px; letter-spacing: .02em; line-height: 1.3; text-wrap: balance; }
-  .close { position: absolute; top: 12px; right: 14px; z-index: 2; background: var(--surface); border: 1px solid var(--line); border-radius: 50%; width: 34px; height: 34px; line-height: 1; font-size: 18px; color: var(--ink); }
+  body.panel-open .panel { transform: none; }
+  #pBody { overflow-y: auto; overscroll-behavior: contain; }
+  .panel .art { border-radius: 0; aspect-ratio: 460/150; }
+  .panel .art::after { content: ""; position: absolute; inset: auto 0 0 0; height: 45%; background: linear-gradient(transparent, var(--surface)); }
+  .panel .inner { position: relative; margin-top: -30px; padding: 0 28px 28px; display: flex; flex-direction: column; gap: 10px; }
+  .panel h2 { font-family: var(--serif); font-weight: 500; font-size: 28px; letter-spacing: .02em; line-height: 1.25; text-wrap: balance; }
+  .close { position: absolute; top: 12px; right: 12px; z-index: 3; background: rgba(20,18,15,.55); border: 1px solid var(--line); border-radius: 50%; width: 34px; height: 34px; line-height: 1; font-size: 18px; color: var(--ink); backdrop-filter: blur(4px); }
   .close:hover { border-color: var(--ink); }
-  .label { font-size: 12px; letter-spacing: .18em; color: var(--muted); margin: 22px 0 4px; text-transform: uppercase; }
+  .label { font-size: 12px; letter-spacing: .18em; color: var(--muted); margin: 16px 0 2px; text-transform: uppercase; }
   .facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 18px; font-size: 14px; }
   .facts dt { color: var(--muted); }
-  .opts { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
-  .opt { display: flex; align-items: center; gap: 12px; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 13px 4px; font-size: 15px; width: 100%; }
-  .opt i { width: 9px; height: 9px; border-radius: 50%; background: var(--c); flex: none; }
-  .opt .tick { margin-left: auto; color: var(--accent); font-size: 14px; visibility: hidden; }
-  .opt:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
-  .opt[aria-pressed="true"] { font-weight: 700; }
-  .opt[aria-pressed="true"] .tick { visibility: visible; }
+  .opts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .opt { display: flex; align-items: center; justify-content: center; gap: 8px; background: none; border: 1px solid var(--line); border-radius: 999px; padding: 9px 10px; font-size: 13.5px; white-space: nowrap; transition: border-color .15s, background .15s; }
+  .opt i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex: none; }
+  .opt:hover { border-color: var(--muted); }
+  .opt[aria-pressed="true"] { border-color: var(--c); background: color-mix(in srgb, var(--c) 20%, transparent); font-weight: 700; }
   .opt:disabled { opacity: .5; cursor: progress; }
-  .switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; background: none; border: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 13px 4px; font-size: 15px; text-align: left; }
+  @media (max-width: 460px) { .opts { grid-template-columns: repeat(2, 1fr); } .panel .inner { padding: 0 20px 22px; } }
+  .switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; background: none; border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; font-size: 15px; text-align: left; }
   .switch:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
   .switch:disabled { opacity: .5; cursor: progress; }
   .switch small { display: block; color: var(--muted); font-size: 12.5px; }
@@ -142,8 +148,8 @@
   .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: transform .2s, background .2s; }
   .switch[aria-checked="true"] .track { background: var(--accent); border-color: var(--accent); }
   .switch[aria-checked="true"] .track::after { transform: translateX(16px); background: var(--accent-ink); }
-  .plinks { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 6px; }
-  .plinks a { font-size: 14px; border-bottom: 1px solid var(--line); padding-bottom: 2px; text-decoration: none; }
+  .plinks { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  .plinks a { font-size: 13.5px; border: 1px solid var(--line); border-radius: 999px; padding: 7px 15px; text-decoration: none; }
   .plinks a:hover { border-color: var(--ink); }
 
   /* states */
@@ -211,11 +217,12 @@
   </main>
 </div>
 
-<div class="scrim" id="scrim"></div>
-<aside class="panel" id="panel" role="dialog" aria-modal="true" aria-labelledby="pTitle" aria-hidden="true">
-  <button class="close" id="pClose" type="button" aria-label="Close">×</button>
-  <div id="pBody"></div>
-</aside>
+<div class="scrim" id="scrim" aria-hidden="true">
+  <div class="panel" id="panel" role="dialog" aria-modal="true" aria-labelledby="pTitle">
+    <button class="close" id="pClose" type="button" aria-label="Close">×</button>
+    <div id="pBody"></div>
+  </div>
+</div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -382,18 +389,18 @@ function card(g, i) {
     </div></article>`;
 }
 
-/* ── side panel ── */
+/* ── game pop-up ── */
 function openPanel(id) {
   const g = games.find(x => x.id === id); if (!g) return;
   lastFocus = document.activeElement; openId = id;
   paintPanel(g);
-  document.body.classList.add("panel-open"); $("panel").setAttribute("aria-hidden", "false");
+  document.body.classList.add("panel-open"); $("scrim").setAttribute("aria-hidden", "false");
   document.querySelectorAll(".card").forEach(c => c.classList.toggle("sel", c.dataset.id === id));
   $("pClose").focus({ preventScroll: true });
 }
 function closePanel() {
   if (!openId) return;
-  openId = null; document.body.classList.remove("panel-open"); $("panel").setAttribute("aria-hidden", "true");
+  openId = null; document.body.classList.remove("panel-open"); $("scrim").setAttribute("aria-hidden", "true");
   document.querySelectorAll(".card.sel").forEach(c => c.classList.remove("sel"));
   if (lastFocus && document.contains(lastFocus)) lastFocus.focus({ preventScroll: true });
 }
@@ -401,14 +408,16 @@ function paintPanel(g) {
   const links = [["Store page", g.store], ["Reviews", g.review], ["Trailer", g.video], ["Open in Notion", g.url]]
     .filter(([, u]) => safeUrl(u)).map(([l, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${l}</a>`).join("");
   const fact = (k, v) => v ? `<dt>${k}</dt><dd>${esc(v)}</dd>` : "";
+  $("panel").classList.toggle("hot", g.hype === "★★★");
   $("pBody").innerHTML = `${artBlock(g)}
     <div class="inner">
       <h2 id="pTitle">${esc(g.name)}</h2>
+      <div class="state">${hypeMeter(g)}${g.installed ? '<span style="--c:var(--accent)"><i></i>Installed</span>' : ""}${statusMark(g)}</div>
       ${g.developer ? `<div class="dev">${esc(g.developer)}</div>` : ""}
       <dl class="facts" style="margin-top:8px">
         ${fact("Release", g.release_date ? fmtDate(g.release_date) : "")}${fact("Length", g.time_to_beat ? g.time_to_beat + " hours" : "")}
         ${fact("Genre", g.genres.join(", "))}${fact("Platform", g.platforms.join(", "))}
-        ${fact("Hype", g.hype)}${fact("Your rating", g.rating)}
+        ${fact("Your rating", g.rating)}
       </dl>
       <div class="label">Installed</div>
       <button class="switch" id="pInstalled" type="button" role="switch" aria-checked="${g.installed}">
@@ -416,7 +425,7 @@ function paintPanel(g) {
       </button>
       <div class="label" id="pStatusLabel">Status</div>
       <div class="opts" role="group" aria-labelledby="pStatusLabel">
-        ${STATUS_ORDER.map(s => `<button class="opt" type="button" data-status="${s}" aria-pressed="${g.status === s}" style="--c:${STATUS_COLOR[s]}"><i></i>${s}<span class="tick">✓</span></button>`).join("")}
+        ${STATUS_ORDER.map(s => `<button class="opt" type="button" data-status="${s}" aria-pressed="${g.status === s}" style="--c:${STATUS_COLOR[s]}"><i></i>${s}</button>`).join("")}
       </div>
       ${links ? `<div class="label">Links</div><div class="plinks">${links}</div>` : ""}
     </div>`;
@@ -467,8 +476,16 @@ $("pBody").addEventListener("click", e => {
   const b = e.target.closest(".opt"); if (b) return setStatus(openId, b.dataset.status);
   const sw = e.target.closest(".switch"); if (sw) setInstalled(openId, sw.getAttribute("aria-checked") !== "true");
 });
-$("pClose").onclick = closePanel; $("scrim").onclick = closePanel;
-document.addEventListener("keydown", e => { if (e.key === "Escape") closePanel(); });
+$("pClose").onclick = closePanel;
+$("scrim").addEventListener("click", e => { if (e.target === $("scrim")) closePanel(); });
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") return closePanel();
+  if (e.key !== "Tab" || !openId) return;                       // keep keyboard focus inside the pop-up
+  const items = [...$("panel").querySelectorAll("button:not(:disabled), a[href]")];
+  const first = items[0], last = items[items.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
 $("refresh").onclick = () => { closePanel(); load(); };
 $("lock").onclick = () => { store.del("gbb-key"); showGate(); };
 $("gateForm").addEventListener("submit", e => { e.preventDefault(); store.set("gbb-key", $("keyInput").value.trim()); $("keyInput").value = ""; load(); });
