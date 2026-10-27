@@ -486,3 +486,31 @@ class TestGameMedia:
         assert c.get("/api/game-media?appid=42", headers=self.H).json()["video"] == "https://cdn/a.mp4"
         c.get("/api/game-media?appid=42", headers=self.H)
         assert route.call_count == 1
+
+
+class TestRating:
+    PID = "3fa50bcb-4868-81fa-bdb6-cca3e55d5189"
+    H = {"x-secret-key": "test-secret"}
+
+    @respx.mock
+    async def test_set_rating_writes_the_select_and_can_clear(self):
+        route = respx.patch(f"https://api.notion.com/v1/pages/{self.PID}").mock(return_value=httpx.Response(200, json={}))
+        await notion.set_rating(self.PID, 9)
+        import json
+        assert json.loads(route.calls[0].request.content) == {"properties": {"My Rating": {"select": {"name": "9/10"}}}}
+        await notion.set_rating(self.PID, None)
+        assert json.loads(route.calls[1].request.content) == {"properties": {"My Rating": {"select": None}}}
+        with pytest.raises(ValueError):
+            await notion.set_rating(self.PID, 11)
+
+    def test_endpoint_validates_and_saves(self):
+        from fastapi.testclient import TestClient
+        c = TestClient(bot.app)
+        assert c.post("/api/game-rating", json={"id": self.PID, "rating": 8}).status_code == 401
+        for bad in ({"id": self.PID, "rating": 0}, {"id": self.PID, "rating": 11}, {"id": self.PID, "rating": "x"},
+                    {"id": self.PID}, {"id": "../x", "rating": 5}):
+            assert c.post("/api/game-rating", json=bad, headers=self.H).status_code == 422, bad
+        with respx.mock:
+            respx.patch(f"https://api.notion.com/v1/pages/{self.PID}").mock(return_value=httpx.Response(200, json={}))
+            assert c.post("/api/game-rating", json={"id": self.PID, "rating": 7}, headers=self.H).json() == {"ok": True}
+            assert c.post("/api/game-rating", json={"id": self.PID, "rating": None}, headers=self.H).json() == {"ok": True}

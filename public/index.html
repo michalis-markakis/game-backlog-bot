@@ -112,6 +112,11 @@
   .hype { display: inline-flex; gap: 1px; flex: none; font-size: 12px; line-height: 1; letter-spacing: 0; }
   .hype .on { color: var(--clay); }
   .hype .off { color: var(--line); }
+  .rate { font-size: 12px; font-weight: 700; letter-spacing: .02em; color: var(--clay); white-space: nowrap; }
+  .rate.none { font-weight: 400; font-style: italic; color: var(--muted); }
+  .state .rate { margin-left: auto; }
+  .mini .side { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex: none; }
+  .mini .side .rate { font-size: 11.5px; }
   .soon { color: var(--accent); font-weight: 500; }
 
   /* pop-up: a dark ink card centred over a dimmed, blurred page */
@@ -145,13 +150,21 @@
   .label { font-size: 12px; letter-spacing: .18em; color: var(--muted); margin: 10px 0 0; text-transform: uppercase; }
   .facts { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 3px 14px; font-size: 13px; }
   .facts dt { color: var(--muted); }
+  .rnow { margin-left: 10px; letter-spacing: 0; text-transform: none; font-size: 13px; }
+  .rate10 { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
+  .rt { background: none; border: 1px solid var(--line); border-radius: 6px; padding: 6px 0; font-size: 13px; transition: border-color .15s, background .15s; }
+  .rt:hover { border-color: var(--muted); }
+  .rt[aria-pressed="true"] { border-color: var(--clay); background: color-mix(in srgb, var(--clay) 22%, transparent); color: var(--ink); font-weight: 700; }
+  .rt:disabled { opacity: .5; cursor: progress; }
+  .rclear { background: none; border: 0; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 12.5px; padding: 2px 0; align-self: flex-start; margin-top: 4px; }
+  .rclear:hover { color: var(--ink); border-color: var(--ink); }
   .opts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
   .opt { display: flex; align-items: center; justify-content: center; gap: 8px; background: none; border: 1px solid var(--line); border-radius: 999px; padding: 6px 8px; font-size: 13px; white-space: nowrap; transition: border-color .15s, background .15s; }
   .opt i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex: none; }
   .opt:hover { border-color: var(--muted); }
   .opt[aria-pressed="true"] { border-color: var(--c); background: color-mix(in srgb, var(--c) 20%, transparent); font-weight: 700; }
   .opt:disabled { opacity: .5; cursor: progress; }
-  @media (max-width: 460px) { .opts { grid-template-columns: repeat(2, 1fr); } .panel .inner { padding: 0 20px 22px; } }
+  @media (max-width: 460px) { .opts { grid-template-columns: repeat(2, 1fr); } .rate10 { grid-template-columns: repeat(5, 1fr); } .panel .inner { padding: 0 20px 22px; } }
   .switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; background: none; border: 1px solid var(--line); border-radius: 6px; padding: 7px 12px; font-size: 14px; text-align: left; }
   .switch:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
   .switch:disabled { opacity: .5; cursor: progress; }
@@ -226,7 +239,8 @@
     .text-btn { padding: 12px 10px; }
     .tab { padding: 12px 6px; min-width: 44px; }
     .close { width: 44px; height: 44px; }
-    .opt { min-height: 44px; }
+    .opt, .rt { min-height: 44px; }
+    .rclear { padding: 12px 0; }
     .plinks a { padding: 11px 16px; }
   }
   [hidden] { display: none !important; }
@@ -305,12 +319,15 @@ const store = {
 const DEMO = !!window.__DEMO__ || new URLSearchParams(location.search).has("demo");
 
 let games = [];
+// Notion stores "9/10"; the page works with the number (or null when unrated).
+const normalize = list => list.map(g => ({ ...g, rating: parseInt(g.rating, 10) || null }));
+const rateTag = g => `<span class="rate${g.rating ? "" : " none"}">${g.rating ? g.rating + "/10" : "Unrated"}</span>`;
 const state = { q: "", status: "", genre: "", platform: "", sort: "added" };
 let openId = null, lastFocus = null;
 
 /* ── data ── */
 async function load() {
-  if (DEMO) { games = demoGames(); show(); return; }
+  if (DEMO) { games = normalize(demoGames()); show(); return; }
   const key = store.get("gbb-key");
   if (!key) return showGate();
   $("main").hidden = false; $("gate").hidden = true;
@@ -319,7 +336,7 @@ async function load() {
     const r = await fetch("/api/games", { headers: { "x-secret-key": key } });
     if (r.status === 401) { store.del("gbb-key"); return showGate("That key didn't work."); }
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
-    games = (await r.json()).games;
+    games = normalize((await r.json()).games);
     show();
   } catch (e) {
     $("grid").innerHTML = `<div class="center"><h2>Couldn't load your backlog</h2>${esc(e.message)}</div>`;
@@ -419,7 +436,7 @@ function mini(g, sub) {
   const ph = `<div class="ph" style="background:linear-gradient(135deg,${h1},${h2})"></div>`;
   return `<button class="mini${g.hype === "★★★" ? " hot" : ""}" type="button" data-id="${esc(g.id)}">
     ${a ? `<img src="${esc(a)}" alt="" loading="lazy" onerror="this.outerHTML=this.dataset.ph" data-ph="${esc(ph)}">` : ph}
-    <div><b>${esc(g.name)}</b><small>${sub}</small></div>${hypeMeter(g)}</button>`;
+    <div><b>${esc(g.name)}</b><small>${sub}</small></div><span class="side">${hypeMeter(g)}${rateTag(g)}</span></button>`;
 }
 function renderShelves() {
   const ready = games.filter(g => g.installed && g.status === "Out").sort((a, b) => a.name.localeCompare(b.name));
@@ -445,13 +462,13 @@ function renderShelves() {
 }
 function card(g, i) {
   const tags = [...g.genres.slice(0, 3).map(esc), ...g.platforms.map(p => `<b>${esc(p)}</b>`)].join(" · ");
-  const extra = [g.time_to_beat ? g.time_to_beat + "h" : "", g.rating].filter(Boolean).map(esc).join(" · ");
+  const extra = g.time_to_beat ? g.time_to_beat + "h" : "";
   return `<article class="card${g.hype === "★★★" ? " hot" : ""}${g.id === openId ? " sel" : ""}" tabindex="0" role="button" data-id="${esc(g.id)}" aria-label="${esc(g.name)}, open details" style="animation-delay:${Math.min(i, 12) * 25}ms">
     ${artBlock(g)}
     <div class="body">
       <h3>${esc(g.name)}</h3>
       ${g.developer ? `<div class="dev">${esc(g.developer)}</div>` : ""}
-      <div class="state">${g.installed ? '<span style="--c:var(--accent)"><i></i>Installed</span>' : ""}${statusMark(g)}</div>
+      <div class="state">${g.installed ? '<span style="--c:var(--accent)"><i></i>Installed</span>' : ""}${statusMark(g)}${rateTag(g)}</div>
       <div class="tags">${tags}</div>
       <div class="meta"><span>${whenLabel(g)}${extra ? " · " + extra : ""}</span>${hypeMeter(g)}</div>
     </div></article>`;
@@ -485,8 +502,12 @@ function paintPanel(g) {
       <dl class="facts" style="margin-top:8px">
         ${fact("Release", g.release_date ? fmtDate(g.release_date) : "")}${fact("Length", g.time_to_beat ? g.time_to_beat + " hours" : "")}
         ${fact("Genre", g.genres.join(", "))}${fact("Platform", g.platforms.join(", "))}
-        ${fact("Your rating", g.rating)}
       </dl>
+      <div class="label" id="pRateLabel">Your rating<span class="rnow">${rateTag(g)}</span></div>
+      <div class="rate10" role="group" aria-labelledby="pRateLabel">
+        ${Array.from({ length: 10 }, (_, i) => i + 1).map(n => `<button class="rt" type="button" data-rating="${n}" aria-pressed="${g.rating === n}" aria-label="${n} out of 10">${n}</button>`).join("")}
+      </div>
+      ${g.rating ? '<button class="rclear" type="button">Clear rating</button>' : ""}
       <div class="label">Installed</div>
       <button class="switch" id="pInstalled" type="button" role="switch" aria-checked="${g.installed}">
         <span>Installed on your machine<small>Out games that are installed appear in Ready to Play</small></span><span class="track"></span>
@@ -531,7 +552,7 @@ async function change(id, field, value, path, message) {
   const prev = g[field];
   g[field] = value; render(); paintPanel(g);
   if (DEMO) return toast(message(g));
-  $("pBody").querySelectorAll(".opt, .switch").forEach(b => b.disabled = true);
+  $("pBody").querySelectorAll(".opt, .switch, .rt, .rclear").forEach(b => b.disabled = true);
   try {
     const r = await fetch(path, {
       method: "POST", headers: { "content-type": "application/json", "x-secret-key": store.get("gbb-key") || "" },
@@ -539,6 +560,7 @@ async function change(id, field, value, path, message) {
     });
     if (r.status === 401) { store.del("gbb-key"); throw new Error("Your key is no longer valid. Reload to enter it again."); }
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+    if (openId === id) paintPanel(g);                           // repaint re-enables the controls for the next change
     toast(message(g));
   } catch (e) {
     g[field] = prev; render();
@@ -547,6 +569,7 @@ async function change(id, field, value, path, message) {
   }
 }
 const setStatus = (id, status) => change(id, "status", status, "/api/game-status", g => `${g.name}: ${status}`);
+const setRating = (id, n) => change(id, "rating", n, "/api/game-rating", g => n ? `${g.name}: rated ${n}/10` : `${g.name}: rating cleared`);
 const setInstalled = (id, on) => change(id, "installed", on, "/api/game-installed", g => `${g.name}: ${on ? "installed" : "not installed"}`);
 
 /* ── events ── */
@@ -561,6 +584,8 @@ $("grid").addEventListener("keydown", e => {
 });
 $("pBody").addEventListener("click", e => {
   if (!openId) return;
+  const rt = e.target.closest(".rt"); if (rt) return setRating(openId, +rt.dataset.rating);
+  if (e.target.closest(".rclear")) return setRating(openId, null);
   const b = e.target.closest(".opt"); if (b) return setStatus(openId, b.dataset.status);
   const sw = e.target.closest(".switch"); if (sw) setInstalled(openId, sw.getAttribute("aria-checked") !== "true");
 });

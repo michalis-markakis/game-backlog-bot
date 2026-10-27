@@ -127,6 +127,11 @@ class StatusChange(BaseModel):
     status: str
 
 
+class RatingChange(BaseModel):
+    id: str = Field(pattern=_PAGE_ID)
+    rating: int | None = Field(ge=1, le=10)               # 1-10, or null to clear (the field itself is required)
+
+
 class InstalledChange(BaseModel):
     id: str = Field(pattern=_PAGE_ID)
     installed: bool
@@ -142,6 +147,18 @@ async def game_status(change: StatusChange, request: Request):
         await notion.update_status(change.id, change.status)
     except Exception as e:
         print(f"[notion] status update failed: {e}")
+        raise HTTPException(status_code=502, detail="Could not save to Notion")
+    return {"ok": True}
+
+
+@app.post("/api/game-rating")
+async def game_rating(change: RatingChange, request: Request):
+    """Rate a game 1-10, or clear its rating, from the dashboard's pop-up."""
+    _require_key(request)
+    try:
+        await notion.set_rating(change.id, change.rating)
+    except Exception as e:
+        print(f"[notion] rating update failed: {e}")
         raise HTTPException(status_code=502, detail="Could not save to Notion")
     return {"ok": True}
 
