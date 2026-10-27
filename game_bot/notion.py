@@ -140,3 +140,14 @@ async def update_status(page_id: str, status: str) -> None:
         r = await client.patch(f"https://api.notion.com/v1/pages/{page_id}", headers=NOTION_HEADERS,
                                json={"properties": {"Status": {"select": {"name": status}}}})
     r.raise_for_status()
+
+
+async def set_rating(page_id: str, rating: int | None) -> None:
+    """Set "My Rating" (the 1/10 .. 10/10 select) on an existing To Play page; None clears it."""
+    if rating is not None and not 1 <= rating <= 10:
+        raise ValueError(f"rating out of range: {rating}")
+    value = {"name": f"{rating}/10"} if rating is not None else None
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.patch(f"https://api.notion.com/v1/pages/{page_id}", headers=NOTION_HEADERS,
+                               json={"properties": {"My Rating": {"select": value}}})
+    r.raise_for_status()
