@@ -322,7 +322,7 @@ let games = [];
 // Notion stores "9/10"; the page works with the number (or null when unrated).
 const normalize = list => list.map(g => ({ ...g, rating: parseInt(g.rating, 10) || null }));
 const rateTag = g => `<span class="rate${g.rating ? "" : " none"}">${g.rating ? g.rating + "/10" : "Unrated"}</span>`;
-const state = { q: "", status: "", genre: "", platform: "", sort: "added" };
+const state = { q: "", statuses: new Set(), genre: "", platform: "", sort: "added" };   // no statuses picked = All
 let openId = null, lastFocus = null;
 
 /* ── data ── */
@@ -403,14 +403,15 @@ function buildSelects() {
 }
 function buildTabs() {
   const st = new Map(counts("status"));
-  const tab = (s, label, n) => `<button class="tab${state.status === s ? " on" : ""}" type="button" data-s="${s}" aria-pressed="${state.status === s}">${label}<em>${n}</em></button>`;
-  $("statusTabs").innerHTML = tab("", "All", games.length) +
-    STATUS_ORDER.filter(s => !QUIET.has(s) && st.has(s)).map(s => tab(s, s, st.get(s))).join("");
+  // Every status can be picked, several at once; "All" clears the pick.
+  const tab = (s, label, n, on) => `<button class="tab${on ? " on" : ""}" type="button" data-s="${s}" aria-pressed="${on}">${label}<em>${n}</em></button>`;
+  $("statusTabs").innerHTML = tab("", "All", games.length, !state.statuses.size) +
+    STATUS_ORDER.map(s => tab(s, s, st.get(s) || 0, state.statuses.has(s))).join("");
 }
 function visible() {
   const q = state.q.toLowerCase();
   const list = games.filter(g =>
-    (!state.status || g.status === state.status) &&
+    (!state.statuses.size || state.statuses.has(g.status)) &&
     (!state.genre || g.genres.includes(state.genre)) &&
     (!state.platform || g.platforms.includes(state.platform)) &&
     (!q || [g.name, g.developer, ...g.genres, ...g.platforms].join(" ").toLowerCase().includes(q)));
@@ -575,7 +576,13 @@ const setInstalled = (id, on) => change(id, "installed", on, "/api/game-installe
 /* ── events ── */
 let t; $("q").addEventListener("input", e => { clearTimeout(t); t = setTimeout(() => { state.q = e.target.value.trim(); render(); }, 120); });
 for (const k of ["genre", "platform", "sort"]) $(k).addEventListener("change", e => { state[k] = e.target.value; render(); });
-$("statusTabs").addEventListener("click", e => { const c = e.target.closest(".tab"); if (c) { state.status = c.dataset.s; render(); } });
+$("statusTabs").addEventListener("click", e => {
+  const c = e.target.closest(".tab"); if (!c) return;
+  const s = c.dataset.s;
+  if (!s) state.statuses.clear();
+  else if (state.statuses.has(s)) state.statuses.delete(s); else state.statuses.add(s);
+  render();
+});
 for (const id of ["grid", "shelves"]) {
   $(id).addEventListener("click", e => { const c = e.target.closest("[data-id]"); if (c) openPanel(c.dataset.id); });
 }
